@@ -8,6 +8,8 @@ import { formSuccess, type FormState } from "@/lib/forms/form-state";
 
 import { findQuestionnaire } from "../data/questionnaires-repository";
 import { createStep, deleteStep, listSteps, updateStep } from "../data/steps-repository";
+import { findTip } from "@/features/tips/data/tips-repository";
+
 import { deleteStepById, saveStep, type DeleteStepResult } from "./save-step";
 
 function revalidateQuestionnaire(questionnaireId: string) {
@@ -26,6 +28,7 @@ export async function saveStepAction(
     getCurrentAdmin,
     questionnaireExists: async (id) => (await findQuestionnaire(id)) !== null,
     listSteps,
+    tipExists: async (tipId) => (await findTip(tipId)) !== null,
     create: createStep,
     update: updateStep,
   });

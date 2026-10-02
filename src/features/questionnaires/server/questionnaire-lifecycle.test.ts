@@ -44,6 +44,7 @@ function publishDeps(overrides: Partial<PublishDeps> = {}): PublishDeps {
     findQuestionnaire: vi.fn().mockResolvedValue(questionnaire()),
     listSteps: vi.fn().mockResolvedValue([step]),
     categoryState: vi.fn().mockResolvedValue({ exists: true, active: true }),
+    tipStates: vi.fn().mockResolvedValue(new Map()),
     setStatus: vi.fn().mockResolvedValue(true),
     ...overrides,
   };

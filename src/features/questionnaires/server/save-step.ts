@@ -12,6 +12,7 @@ export type SaveStepDeps = {
   getCurrentAdmin: () => Promise<AdminSession | null>;
   questionnaireExists: (questionnaireId: string) => Promise<boolean>;
   listSteps: (questionnaireId: string) => Promise<StepRecord[]>;
+  tipExists: (tipId: string) => Promise<boolean>;
   create: (questionnaireId: string, step: Step, adminUid: string) => Promise<string>;
   update: (questionnaireId: string, stepId: string, step: Step, adminUid: string) => Promise<boolean>;
 };
@@ -80,6 +81,14 @@ export async function saveStep(
     return { ok: false, state: formError("Revise os saltos destacados.", values, fieldErrors) };
   }
   if (cycleMessage) return { ok: false, state: formError(cycleMessage, values) };
+
+  const tipId = parsed.data.infoFlag?.tipId;
+  if (tipId && !(await deps.tipExists(tipId))) {
+    return {
+      ok: false,
+      state: formError("Revise os campos destacados.", values, { "infoFlag.tipId": "Dica não encontrada. Ela pode ter sido excluída." }),
+    };
+  }
 
   if (stepId === null) {
     return { ok: true, stepId: await deps.create(questionnaireId, parsed.data, admin.uid), created: true };

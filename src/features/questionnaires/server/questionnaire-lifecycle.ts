@@ -1,35 +1,27 @@
 import type { AdminSession } from "@/features/auth/domain/admin-session";
+import { actionFailure as failure, actionSuccess as success, type ActionResult } from "@/lib/forms/action-result";
 
-import { checkPublishable, type CategoryState } from "../domain/lifecycle";
+import { checkPublishable, type CategoryState, type TipStates } from "../domain/lifecycle";
 import type { Questionnaire } from "../domain/questionnaire";
 import type { QuestionnaireStatus } from "../domain/schemas";
 import type { StepRecord } from "../domain/steps";
 import { SESSION_EXPIRED_MESSAGE } from "./save-questionnaire";
 
-export type LifecycleResult =
-  | { ok: true; message: string; warnings: string[] }
-  | { ok: false; message: string; problems: string[] };
+export type LifecycleResult = ActionResult;
 
 type AdminDeps = { getCurrentAdmin: () => Promise<AdminSession | null> };
 
 const GONE = "Este questionário não existe mais.";
 
-function failure(message: string, problems: string[] = []): LifecycleResult {
-  return { ok: false, message, problems };
-}
-
-function success(message: string, warnings: string[] = []): LifecycleResult {
-  return { ok: true, message, warnings };
-}
-
 export type PublishDeps = AdminDeps & {
   findQuestionnaire: (id: string) => Promise<Questionnaire | null>;
   listSteps: (id: string) => Promise<StepRecord[]>;
   categoryState: (categoryId: string) => Promise<CategoryState>;
+  tipStates: () => Promise<TipStates>;
   setStatus: (id: string, status: QuestionnaireStatus, adminUid: string) => Promise<boolean>;
 };
 
-/** Publishes after checkPublishable passes (steps, schema, flow, category). */
+/** Publishes after checkPublishable passes (steps, schema, flow, category, linked tips). */
 export async function publishQuestionnaire(id: string, deps: PublishDeps): Promise<LifecycleResult> {
   const admin = await deps.getCurrentAdmin();
   if (!admin) return failure(SESSION_EXPIRED_MESSAGE);
@@ -37,8 +29,12 @@ export async function publishQuestionnaire(id: string, deps: PublishDeps): Promi
   const questionnaire = await deps.findQuestionnaire(id);
   if (!questionnaire) return failure(GONE);
 
-  const [steps, category] = await Promise.all([deps.listSteps(id), deps.categoryState(questionnaire.categoryId)]);
-  const check = checkPublishable(steps, category);
+  const [steps, category, tips] = await Promise.all([
+    deps.listSteps(id),
+    deps.categoryState(questionnaire.categoryId),
+    deps.tipStates(),
+  ]);
+  const check = checkPublishable(steps, category, tips);
   if (!check.ok) return failure("Ainda não dá para publicar:", check.problems);
 
   if (!(await deps.setStatus(id, "published", admin.uid))) return failure(GONE);

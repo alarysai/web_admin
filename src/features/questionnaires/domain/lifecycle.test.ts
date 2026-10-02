@@ -90,3 +90,25 @@ describe("duplicateSteps", () => {
     expect(steps[0].id).toBe("a");
   });
 });
+
+describe("checkPublishable with linked tips", () => {
+  const withTip = (tipId: string): StepRecord => ({
+    ...video("a", 1),
+    infoFlag: { label: { pt: "Isso é ético?", en: null, es: null }, value: true, tipId },
+  });
+
+  it("blocks a link to a deleted tip", () => {
+    expect(checkPublishable([withTip("gone")], activeCategory, new Map())).toEqual({
+      ok: false,
+      problems: ["O passo #1 está ligado a uma dica que não existe mais."],
+    });
+  });
+
+  it("warns about an inactive tip and accepts an active one", () => {
+    expect(checkPublishable([withTip("t1")], activeCategory, new Map([["t1", { active: false }]]))).toMatchObject({
+      ok: true,
+      warnings: [expect.stringContaining("Dica inativa nos passos #1")],
+    });
+    expect(checkPublishable([withTip("t1")], activeCategory, new Map([["t1", { active: true }]]))).toEqual({ ok: true, warnings: [] });
+  });
+});

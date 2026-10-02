@@ -11,6 +11,9 @@ export type FormState = {
   values: Record<string, string> | null;
 };
 
+/** Shown when a Server Action runs without an active admin session. */
+export const SESSION_EXPIRED_MESSAGE = "Sua sessão expirou. Entre de novo para salvar.";
+
 export const initialFormState: FormState = {
   status: "idle",
   message: null,

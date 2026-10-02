@@ -45,6 +45,7 @@ function deps(overrides: Partial<SaveStepDeps> = {}): SaveStepDeps {
     getCurrentAdmin: vi.fn().mockResolvedValue(admin),
     questionnaireExists: vi.fn().mockResolvedValue(true),
     listSteps: vi.fn().mockResolvedValue([existingStep("s1")]),
+    tipExists: vi.fn().mockResolvedValue(true),
     create: vi.fn().mockResolvedValue("new-step"),
     update: vi.fn().mockResolvedValue(true),
     ...overrides,
@@ -102,6 +103,19 @@ describe("saveStep", () => {
     const d = deps({ questionnaireExists: vi.fn().mockResolvedValue(false) });
     expect(await saveStep("gone", null, videoForm(), d)).toMatchObject({ ok: false, state: { message: "Este questionário não existe mais." } });
     expect(d.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a link to a tip that does not exist", async () => {
+    const d = deps({ tipExists: vi.fn().mockResolvedValue(false) });
+    const data = videoForm();
+    data.append("infoFlag.enabled", "on");
+    data.append("infoFlag.label.pt", "Isso é ético?");
+    data.append("infoFlag.value", "true");
+    data.append("infoFlag.tipId", "gone");
+    const result = await saveStep("q1", "s1", data, d);
+    expect(result).toMatchObject({ ok: false, state: { fieldErrors: { "infoFlag.tipId": expect.stringContaining("Dica não encontrada") } } });
+    expect(d.tipExists).toHaveBeenCalledWith("gone");
+    expect(d.update).not.toHaveBeenCalled();
   });
 
   it("reports a step deleted meanwhile", async () => {

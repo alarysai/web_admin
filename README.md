@@ -35,7 +35,9 @@ src/
     (painel)/loading.tsx  # estado de carregamento das páginas do painel
     (painel)/error.tsx    # erro ao carregar (ex.: Firestore fora) com "Tentar de novo"
     (painel)/questionarios/            # lista (?q=&categoria=), novo/, [id]/, [id]/passos/novo, [id]/passos/[stepId], [id]/fluxo
-    (painel)/categorias/               # lista, nova/, [id]/
+    (painel)/categorias/               # categorias de questionário: lista, nova/, [id]/
+    (painel)/categorias-dicas/         # categorias de dicas: lista, nova/, [id]/
+    (painel)/dicas/                    # lista (?q=&categoria=), nova/, [id]/
     api/health/route.ts   # GET /api/health: testa o Admin SDK → Firestore
     api/session/route.ts  # POST cria a sessão do admin · DELETE faz logout
   features/auth/
@@ -49,14 +51,17 @@ src/
     data/                 # questionnaires-, steps- e questionnaire-lifecycle-repository (Admin SDK) + mappers defensivos
     server/               # saveQuestionnaire, saveStep/deleteStepById, step-form, questionnaire-lifecycle + Server Actions
     presentation/         # QuestionnaireForm/Table/Filters, QuestionnaireActions, StepForm, StepOptionsEditor, StepList, DeleteStepButton, FlowMap, FlowSimulator
-  features/questionnaire-categories/   # mesma divisão: domain, data, server, presentation
+  features/categories/                 # categorias genéricas por tipo (questionnaire | tip): domain, data, server,
+                                       # presentation (CategoryScreens compartilhadas pelas duas seções)
+  features/tips/                       # dicas: domain (schema, filtro), data (repositório, usos), server (salvar,
+                                       # ativar/desativar/excluir), presentation (TipForm, TipTable, TipActions)
   components/
     FirebaseStatus.tsx    # status do SDK cliente
-    layout/               # AdminNav (menu lateral), PageHeader
-    form/                 # TextField, TextAreaField, SelectField, LocalizedTextFields (PT/EN/ES), FormMessage
+    layout/               # AdminNav (menu lateral), PageHeader, ListFilters (busca + categoria, na URL)
+    form/                 # TextField, TextAreaField, SelectField, LocalizedTextFields (PT/EN/ES), FormMessage, ActionResultMessage
     ui/                   # StatusBadge
   lib/content/            # LocalizedText (schema, idiomas completos, busca sem acento), leitura defensiva do Firestore
-  lib/forms/              # FormState das Server Actions, leitura de FormData, valores iniciais
+  lib/forms/              # FormState e ActionResult das Server Actions, leitura de FormData, valores iniciais
   lib/firebase/
     config.ts             # leitura e validação das variáveis de ambiente (funções puras)
     config.test.ts        # testes de config.ts
@@ -132,15 +137,17 @@ Para tirar o acesso, mude `active` para `false` ou apague o documento. Qualquer 
 
 Server Actions podem ser chamadas por um POST direto, sem passar pela tela. Por isso, **toda Server Action nova precisa conferir o admin dentro dela**. A proteção das páginas não basta.
 
-### Categorias de questionário (`/categorias`)
+### Categorias (`/categorias` e `/categorias-dicas`)
 
-Nome em PT/EN/ES (o português é obrigatório), ordem e status (ativa/inativa). Só as ativas aparecem nos apps. O ícone entra junto com o upload de imagens.
+Categorias de questionário e de dicas têm o mesmo formato: nome em PT/EN/ES (o português é obrigatório), ordem e status (ativa/inativa). Só as ativas aparecem nos apps. Por isso é **uma feature só** (`features/categories`), parametrizada pelo tipo (`questionnaire` → `questionnaireCategories`, `tip` → `tipCategories`). Os arquivos de rota só escolhem o tipo. A Server Action valida o tipo recebido antes de escolher a coleção. Nos seletores e filtros, categorias inativas aparecem com "(inativa)". O ícone da categoria de questionário entra com o upload de imagens.
 
 ### Questionários (`/questionarios`)
 
 - **Lista:** busca pelo título em qualquer idioma, sem diferenciar maiúsculas nem acentos (`?q=`), e filtro por categoria (`?categoria=`). Os filtros ficam na URL. Mostra categoria, idiomas completos, status, ordem e data da última alteração. Há uma mensagem própria para "nenhum cadastrado" e para "nenhum resultado".
 - **Criar e editar:** título (PT obrigatório; EN/ES opcionais), descrição opcional, categoria (precisa existir) e ordem. Todo questionário novo nasce como **rascunho**.
 - **Idiomas completos (`languages`):** recalculados a cada vez que o questionário ou um passo é salvo ou excluído. Um idioma só conta quando título, descrição, passos, opções e informações booleanas estão todos traduzidos nele.
+- Sem nenhuma categoria cadastrada, o botão "Novo questionário" some e a lista mostra um aviso com link para criar uma.
+
 ### Passos (`/questionarios/[id]` → seção "Passos")
 
 - **Lista** na ordem do fluxo: ordem, tipo, nº de opções, texto e marcadores ("Entra no prompt", "Informação booleana"), com Editar e Excluir.
@@ -150,12 +157,11 @@ Nome em PT/EN/ES (o português é obrigatório), ordem e status (ativa/inativa).
   - **Vídeo:** link externo `https://`.
   - **Pergunta:** opções que dá para adicionar e remover (mínimo 1), cada uma com texto PT/EN/ES e instrução de prompt.
   - **"Vira parte do prompt?"** e **instrução de prompt** do passo (não traduzida).
-  - **Informação booleana:** rótulo PT/EN/ES e resposta Sim/Não.
+  - **Informação booleana:** rótulo PT/EN/ES, resposta Sim/Não e a **dica relacionada** (opcional; dicas inativas aparecem com "(inativa)"). O servidor confere se a dica existe. Uma dica ligada que foi apagada continua visível como "Dica inexistente".
   - Um passo novo entra com ordem = última + 1.
 - **Excluir:** pede confirmação. Saltos de outros passos que apontavam para o passo excluído voltam a `null` (seguir a ordem), no mesmo batch da exclusão. A exclusão é **recusada** se isso criar um ciclo ou se for o único passo de um questionário publicado.
 - **Nomes dos campos das opções:** usam o **ID da opção** (`options.<id>.text.pt`), não a posição. Assim, remover uma opção do meio depois de um erro não troca os valores das outras, e os erros do Zod são traduzidos de posição para ID.
 - **Saltos:** "Próximo passo" no passo e "Depois desta opção" em cada opção. As escolhas são seguir a ordem (ou o próximo do passo), ir para outro passo do questionário ou encerrar o questionário. Um salto salvo para um passo que não existe mais continua aparecendo como "Passo inexistente", em vez de sumir sem aviso.
-- **Campo preservado:** `infoFlag.tipId` viaja como campo oculto. Salvar o formulário mantém a dica ligada (cadastro de Dicas, 3.4).
 - **Sem imagens por enquanto:** `image` é gravado como `null` até o Storage ser ativado.
 
 ### Validação do fluxo (`domain/flow.ts`)
@@ -171,7 +177,7 @@ Regras do fluxo: [docs/data-model.md → Fluxo e saltos](docs/data-model.md#flux
 
 | Ação | Regra |
 | --- | --- |
-| **Publicar** | Exige: ao menos 1 passo; todo passo válido pelo schema (pega dado antigo ou malformado); fluxo válido (sem ciclo e sem salto quebrado); categoria existente. Se algo falhar, mostra a lista do que corrigir e não publica. Categoria **inativa** é só aviso: publica, mas o app não mostra o questionário até a categoria ser ativada. Grava `status: "published"`, `publishedAt` e recalcula `languages`. |
+| **Publicar** | Exige: ao menos 1 passo; todo passo válido pelo schema (pega dado antigo ou malformado); fluxo válido (sem ciclo e sem salto quebrado); categoria existente; toda dica ligada existente (dica inativa é só aviso). Se algo falhar, mostra a lista do que corrigir e não publica. Categoria **inativa** é só aviso: publica, mas o app não mostra o questionário até a categoria ser ativada. Grava `status: "published"`, `publishedAt` e recalcula `languages`. |
 | **Despublicar** | Pede confirmação. Volta para `draft` e sai dos apps na hora. `publishedAt` guarda a última publicação. |
 | **Duplicar** | Cria uma cópia em **rascunho**, com o título "(cópia)" / "(copy)" / "(copia)", e abre a cópia. Os passos ganham IDs novos e os saltos são remapeados para os passos da cópia. Um salto que apontava para um passo inexistente vira `null`. |
 | **Excluir** | Só para **rascunho**: despublique antes. Pede confirmação e apaga o questionário **e os passos**, porque o Firestore não apaga subcoleções sozinho. Os passos são apagados primeiro; se algo falhar no meio, o questionário continua lá para tentar de novo. |
@@ -183,7 +189,15 @@ Enquanto está publicado, o questionário continua editável. Cada salvamento de
 - **Simular:** percorre o questionário como o app, em PT, EN ou ES (cai para o português quando falta tradução). Mostra o vídeo, as opções e a informação booleana, tem o botão Recomeçar e lista as **partes do prompt**: resposta e instruções dos passos marcados com "vira parte do prompt?". O texto final do prompt é montado pelo serviço de geração.
 - **Mapa:** para cada passo, para onde vai cada opção ("“Ética” → Fim"). Mostra ciclos e saltos quebrados como erro e passos que nenhum caminho alcança como aviso.
 
-- Sem nenhuma categoria cadastrada, o botão "Novo questionário" some e a lista mostra um aviso com link para criar uma.
+### Dicas (`/dicas`)
+
+- **Lista:** busca pelo texto em qualquer idioma, sem acento (`?q=`), e filtro por categoria de dica (`?categoria=`). Mostra categoria, idiomas completos, status e ordem, com estados vazios próprios.
+- **Criar e editar:** categoria (precisa existir), texto PT/EN/ES e ordem (uma dica nova entra depois da última). `languages` é calculado ao salvar. **Toda dica nova nasce inativa.**
+- **Ativar:** exige que a categoria exista. Se ela estiver inativa, ativa com aviso.
+- **Desativar:** pede confirmação. Avisa quais questionários **publicados** ligam a ela e vão deixar de mostrá-la.
+- **Excluir:** pede confirmação e é **recusado enquanto algum passo liga à dica**. A mensagem lista os questionários onde ela é usada, e a tela da dica também mostra onde ela é usada.
+- **Onde é usada:** consulta em grupo de coleções (`collectionGroup("steps")` com `infoFlag.tipId`), que exige o índice em `firestore.indexes.json` → `fieldOverrides`.
+- **Sem imagem por enquanto:** `image: null` até o Storage ser ativado.
 
 ### Entregas da 3.2
 
@@ -276,7 +290,10 @@ npm run test:rules # regras do Firestore/Storage no emulador (exige Java 21+)
 - `features/questionnaires/domain/questionnaire.test.ts`: busca em qualquer idioma, filtro por categoria, ordenação, leitura de `?q=` e `?categoria=`.
 - `features/questionnaires/data/questionnaire-mapper.test.ts`: documento completo, status desconhecido vira rascunho, campos ausentes, idiomas desconhecidos.
 - `features/questionnaires/server/save-questionnaire.test.ts`: criar, editar, sem sessão de admin, erros de campo com os valores digitados de volta, categoria inexistente, questionário apagado no meio.
-- `features/questionnaire-categories/categories.test.ts`: schema, ordenação, mapper e a regra de salvar.
+- `features/categories/categories.test.ts`: schema, ordenação, opções com "(inativa)", mapper e a regra de salvar.
+- `features/tips/tips.test.ts`: schema, busca e filtro, rótulo, mapper, salvar (sessão, campos, categoria inexistente, dica apagada), ativar (categoria inexistente ou inativa), desativar (aviso só para publicados), excluir (bloqueado quando usada), descrição dos usos.
+- `features/tips/presentation/TipScreens.test.tsx` (jsdom): formulário, tabela e estados vazios, ações (ativar, desativar com confirmação e aviso, exclusão bloqueada mostrando os usos, cancelar) e `ListFilters`.
+- Ligação com dicas: `lifecycle.test.ts` (dica apagada bloqueia a publicação, inativa avisa), `save-step.test.ts` (dica inexistente) e `StepForm.test.tsx` (seletor de dica, dica apagada continua visível).
 - `features/questionnaires/domain/steps.test.ts`: ordem do fluxo, ordem do próximo passo, idiomas completos considerando passos, opções e informações booleanas, e limpeza dos saltos ao excluir.
 - `features/questionnaires/data/step-mapper.test.ts`: passo completo, documento malformado, opção sem ID, imagem incompleta.
 - `features/questionnaires/server/step-form.test.ts` e `save-step.test.ts`: leitura do formulário (opções na ordem da tela, saltos ocultos preservados, tipo vídeo descarta opções, checkbox desmarcado, informação booleana), erros traduzidos de posição para ID da opção, criar, editar, sem sessão, questionário ou passo apagado, excluir.

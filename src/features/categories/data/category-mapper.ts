@@ -1,9 +1,9 @@
 import { asDate, asEnum, asLocalizedText, asNumber } from "@/lib/content/firestore-mapping";
 
-import { CATEGORY_STATUSES, type QuestionnaireCategory } from "../domain/category";
+import { CATEGORY_STATUSES, type Category } from "../domain/category";
 
 /** Firestore document → category. Unknown status is treated as inactive (hidden from the apps). */
-export function toCategory(id: string, data: Record<string, unknown> | undefined): QuestionnaireCategory {
+export function toCategory(id: string, data: Record<string, unknown> | undefined): Category {
   const raw = data ?? {};
   return {
     id,

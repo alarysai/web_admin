@@ -1,6 +1,6 @@
 import type { AdminSession } from "@/features/auth/domain/admin-session";
 import { formValues, readInteger, readLocalizedText, readString } from "@/lib/forms/form-data";
-import { formError, zodFieldErrors, type FormState } from "@/lib/forms/form-state";
+import { formError, SESSION_EXPIRED_MESSAGE, zodFieldErrors, type FormState } from "@/lib/forms/form-state";
 
 import { categoryInputSchema, type CategoryInput } from "../domain/category";
 
@@ -25,7 +25,7 @@ export async function saveCategory(id: string | null, formData: FormData, deps: 
   const values = formValues(formData);
 
   const admin = await deps.getCurrentAdmin();
-  if (!admin) return { ok: false, state: formError("Sua sessão expirou. Entre de novo para salvar.", values) };
+  if (!admin) return { ok: false, state: formError(SESSION_EXPIRED_MESSAGE, values) };
 
   const parsed = categoryInputSchema.safeParse(readCategoryForm(formData));
   if (!parsed.success) {

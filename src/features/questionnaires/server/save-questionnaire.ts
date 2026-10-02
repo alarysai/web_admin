@@ -1,5 +1,5 @@
 import type { AdminSession } from "@/features/auth/domain/admin-session";
-import { formError, zodFieldErrors, type FormState } from "@/lib/forms/form-state";
+import { formError, SESSION_EXPIRED_MESSAGE, zodFieldErrors, type FormState } from "@/lib/forms/form-state";
 import { formValues, readInteger, readLocalizedText, readOptionalLocalizedText, readString } from "@/lib/forms/form-data";
 
 import { questionnaireInputSchema, type QuestionnaireInput } from "../domain/schemas";
@@ -13,7 +13,7 @@ export type SaveQuestionnaireDeps = {
 
 export type SaveQuestionnaireResult = { ok: true; id: string; created: boolean } | { ok: false; state: FormState };
 
-export const SESSION_EXPIRED_MESSAGE = "Sua sessão expirou. Entre de novo para salvar.";
+export { SESSION_EXPIRED_MESSAGE };
 
 export function readQuestionnaireForm(formData: FormData) {
   return {

@@ -5,11 +5,13 @@ import { usePathname } from "next/navigation";
 
 export type NavItem = { href: string; label: string };
 
-/** Panel sections. Anunciantes and Dicas are added with tasks 3.3 and 3.4. */
+/** Panel sections. Anunciantes is added with task 3.3. */
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Início" },
   { href: "/questionarios", label: "Questionários" },
-  { href: "/categorias", label: "Categorias" },
+  { href: "/categorias", label: "Categorias de questionário" },
+  { href: "/dicas", label: "Dicas" },
+  { href: "/categorias-dicas", label: "Categorias de dicas" },
 ];
 
 export function isActiveSection(pathname: string, href: string): boolean {

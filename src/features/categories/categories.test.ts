@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { toCategory } from "./data/category-mapper";
-import { categoryInputSchema, sortCategories, type QuestionnaireCategory } from "./domain/category";
+import { categoryInputSchema, categoryOptions, sortCategories, type Category } from "./domain/category";
 import { saveCategory, type SaveCategoryDeps } from "./server/save-category";
 
-function category(id: string, order: number, pt: string): QuestionnaireCategory {
+function category(id: string, order: number, pt: string): Category {
   return { id, name: { pt, en: null, es: null }, order, status: "active", updatedAt: null };
 }
 
@@ -77,5 +77,18 @@ describe("saveCategory", () => {
   it("reports a category deleted meanwhile", async () => {
     const result = await saveCategory("gone", valid(), deps({ update: vi.fn().mockResolvedValue(false) }));
     expect(result).toMatchObject({ ok: false, state: { message: "Esta categoria não existe mais." } });
+  });
+});
+
+describe("categoryOptions", () => {
+  it("orders categories and marks the inactive ones", () => {
+    const options = categoryOptions([
+      { ...category("b", 2, "Conhecimento"), status: "inactive" },
+      category("a", 1, "Ética"),
+    ]);
+    expect(options).toEqual([
+      { value: "a", label: "Ética" },
+      { value: "b", label: "Conhecimento (inativa)" },
+    ]);
   });
 });

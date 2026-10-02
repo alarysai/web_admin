@@ -125,7 +125,7 @@ O ID do documento é o **ID do passo**, usado pelos saltos. Ele é estável: reo
 | --- | --- | --- |
 | `label` | `LocalizedText` | A pergunta informativa (ex.: "Isso é ético?"). |
 | `value` | `boolean` | A resposta definida pelo admin para este passo. |
-| `tipId` | `string \| null` | Dica (`tips/{tipId}`) exibida junto com a informação. |
+| `tipId` | `string \| null` | Dica (`tips/{tipId}`) exibida junto com a informação. O painel confere se ela existe ao salvar o passo e ao publicar, e não deixa excluir uma dica ligada a algum passo. |
 
 #### Fluxo e saltos
 
@@ -153,7 +153,7 @@ Para decidir o passo seguinte, o app usa o primeiro destes que existir:
 | `categoryId` | `string` | sim | ID em `tipCategories`. |
 | `text` | `LocalizedText` | sim | Texto da dica. |
 | `image` | `ImageRef \| null` | não | |
-| `languages` | `("pt" \| "en" \| "es")[]` | sim | Idiomas com tradução completa. Sempre contém `"pt"`. |
+| `languages` | `("pt" \| "en" \| "es")[]` | sim | Idiomas com tradução completa do texto. Sempre contém `"pt"`. Calculado pelo painel ao salvar. |
 | `order` | `number` | sim | |
 | `status` | `"active" \| "inactive"` | sim | |
 | auditoria | | sim | |
@@ -246,6 +246,7 @@ Consultas previstas dos apps (em `firestore.indexes.json`):
 | Dicas ativas de uma categoria, por ordem | `tips`: `status` + `categoryId` + `order` |
 | Categorias, anunciantes e dicas ativos, por ordem | `status` + `order` em `questionnaireCategories`, `tipCategories`, `advertisers`, `tips` |
 | Passos de um questionário | `steps` ordenado por `order` (índice automático) |
+| Passos ligados a uma dica (painel, ao excluir/desativar dica) | `fieldOverrides`: `steps.infoFlag.tipId` em escopo **COLLECTION_GROUP** |
 | Histórico e extrato do usuário, mais recentes primeiro | `createdAt` desc (índice automático) |
 
 > Os apps devem **sempre** filtrar por `status` nas consultas de conteúdo: o Firestore recusa uma consulta que possa devolver documentos que as regras não deixam ler.

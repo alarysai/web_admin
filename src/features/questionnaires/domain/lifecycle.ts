@@ -6,15 +6,18 @@ import { sortSteps, type StepRecord } from "./steps";
 
 export type CategoryState = { exists: boolean; active: boolean };
 
+/** Status of the tips linked by info flags, by tip id. Missing ids = deleted tips. */
+export type TipStates = ReadonlyMap<string, { active: boolean }>;
+
 export type PublishCheck = { ok: true; warnings: string[] } | { ok: false; problems: string[] };
 
 /**
  * Whether a questionnaire can be published (shown in the apps): it needs
  * steps, every step valid by the schema (catches legacy/malformed data), a
- * valid flow and an existing category. An inactive category is a warning:
- * publishing is allowed, but the app hides it until the category is active.
+ * valid flow, an existing category and existing linked tips. An inactive
+ * category or tip is a warning: publishing is allowed, but the app hides it.
  */
-export function checkPublishable(steps: StepRecord[], category: CategoryState): PublishCheck {
+export function checkPublishable(steps: StepRecord[], category: CategoryState, tips: TipStates = new Map()): PublishCheck {
   const problems: string[] = [];
   const ordered = sortSteps(steps);
 
@@ -37,9 +40,22 @@ export function checkPublishable(steps: StepRecord[], category: CategoryState): 
     }
   }
 
+  const inactiveTipSteps: number[] = [];
+  for (const step of ordered) {
+    const tipId = step.infoFlag?.tipId;
+    if (!tipId) continue;
+    const tip = tips.get(tipId);
+    if (!tip) problems.push(`O passo #${step.order} está ligado a uma dica que não existe mais.`);
+    else if (!tip.active) inactiveTipSteps.push(step.order);
+  }
+
   if (problems.length > 0) return { ok: false, problems };
 
-  const warnings = category.active ? [] : ["A categoria está inativa: o questionário só aparece no app quando ela for ativada."];
+  const warnings: string[] = [];
+  if (!category.active) warnings.push("A categoria está inativa: o questionário só aparece no app quando ela for ativada.");
+  if (inactiveTipSteps.length > 0) {
+    warnings.push(`Dica inativa nos passos ${inactiveTipSteps.map((order) => `#${order}`).join(", ")}: o app não a mostra até ela ser ativada.`);
+  }
   return { ok: true, warnings };
 }
 

@@ -19,6 +19,12 @@ import { newOptionId, STEP_TYPE_LABELS, stepSavedValues } from "./step-values";
 
 export type StepFormAction = (previous: FormState, formData: FormData) => Promise<FormState>;
 
+/** Keeps a linked tip that no longer exists visible, so it is not dropped silently on save. */
+function tipSelectOptions(choices: ReadonlyArray<{ value: string; label: string }>, current: string) {
+  if (!current || choices.some((choice) => choice.value === current)) return choices;
+  return [...choices, { value: current, label: `Dica inexistente (${current})` }];
+}
+
 type StepFormProps = {
   questionnaireId: string;
   step: StepRecord | null;
@@ -27,6 +33,8 @@ type StepFormProps = {
   initialOptionId: string;
   /** Other steps of the questionnaire this step (or its options) can jump to. */
   jumpTargets: JumpTarget[];
+  /** Tips the info flag can link to ({ value: tipId, label }). */
+  tipChoices: ReadonlyArray<{ value: string; label: string }>;
   action: StepFormAction;
   initialState?: FormState;
 };
@@ -37,6 +45,7 @@ export function StepForm({
   defaultOrder,
   initialOptionId,
   jumpTargets,
+  tipChoices,
   action,
   initialState = initialFormState,
 }: StepFormProps) {
@@ -54,7 +63,6 @@ export function StepForm({
   return (
     <form action={formAction} className="flex max-w-3xl flex-col gap-6">
       <FormMessage state={state} />
-      <input type="hidden" name="infoFlag.tipId" defaultValue={values["infoFlag.tipId"]} />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <fieldset className="flex flex-col gap-2 text-sm">
@@ -172,7 +180,15 @@ export function StepForm({
                 Não
               </label>
             </fieldset>
-            <p className="text-xs text-zinc-500">A ligação com uma dica fica disponível com o cadastro de Dicas.</p>
+            <SelectField
+              name="infoFlag.tipId"
+              label="Dica relacionada"
+              options={tipSelectOptions(tipChoices, values["infoFlag.tipId"])}
+              placeholder="Nenhuma dica"
+              defaultValue={values["infoFlag.tipId"]}
+              error={errors["infoFlag.tipId"]}
+            />
+            <p className="text-xs text-zinc-500">O app mostra esta dica junto com a informação. Só dicas ativas aparecem nos apps.</p>
           </>
         )}
       </section>

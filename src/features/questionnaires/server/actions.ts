@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getCurrentAdmin } from "@/features/auth/server/current-admin";
-import { findCategory } from "@/features/questionnaire-categories/data/categories-repository";
+import { findCategory } from "@/features/categories/data/categories-repository";
+import { listTips } from "@/features/tips/data/tips-repository";
 import { formSuccess, type FormState } from "@/lib/forms/form-state";
 
 import {
@@ -31,7 +32,7 @@ export async function saveQuestionnaireAction(
 ): Promise<FormState> {
   const result = await saveQuestionnaire(id, formData, {
     getCurrentAdmin,
-    categoryExists: async (categoryId) => (await findCategory(categoryId)) !== null,
+    categoryExists: async (categoryId) => (await findCategory("questionnaire", categoryId)) !== null,
     create: createQuestionnaire,
     update: updateQuestionnaire,
   });
@@ -57,9 +58,10 @@ export async function publishQuestionnaireAction(id: string): Promise<LifecycleR
     findQuestionnaire,
     listSteps,
     categoryState: async (categoryId) => {
-      const category = await findCategory(categoryId);
+      const category = await findCategory("questionnaire", categoryId);
       return { exists: category !== null, active: category?.status === "active" };
     },
+    tipStates: async () => new Map((await listTips()).map((tip) => [tip.id, { active: tip.status === "active" }])),
     setStatus: setQuestionnaireStatus,
   });
   if (result.ok) revalidateQuestionnaire(id);

@@ -1,12 +1,5 @@
-import { PageHeader } from "@/components/layout/PageHeader";
-import { CategoryForm } from "@/features/questionnaire-categories/presentation/CategoryForm";
-import { saveCategoryAction } from "@/features/questionnaire-categories/server/actions";
+import { NewCategoryScreen } from "@/features/categories/presentation/CategoryScreens";
 
 export default function NewCategoryPage() {
-  return (
-    <>
-      <PageHeader title="Nova categoria" />
-      <CategoryForm category={null} action={saveCategoryAction.bind(null, null)} />
-    </>
-  );
+  return <NewCategoryScreen kind="questionnaire" />;
 }

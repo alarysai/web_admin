@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 
+import { ActionResultMessage } from "@/components/form/ActionResultMessage";
+
 import type { QuestionnaireStatus } from "../domain/schemas";
 import type { LifecycleResult } from "../server/questionnaire-lifecycle";
 
@@ -77,21 +79,7 @@ export function QuestionnaireActions({
       </div>
       {published && <p className="text-xs text-zinc-500">Para excluir, despublique primeiro.</p>}
 
-      {result && (
-        <div
-          role={result.ok ? "status" : "alert"}
-          className={`rounded-md px-3 py-2 text-sm ${result.ok ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}
-        >
-          <p>{result.message}</p>
-          {(result.ok ? result.warnings : result.problems).length > 0 && (
-            <ul className="mt-1 list-disc pl-5">
-              {(result.ok ? result.warnings : result.problems).map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      {result && <ActionResultMessage result={result} />}
     </section>
   );
 }

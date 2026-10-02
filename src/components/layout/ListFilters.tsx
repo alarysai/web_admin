@@ -1,15 +1,20 @@
 import Link from "next/link";
 
-import type { QuestionnaireFilters as Filters } from "../domain/questionnaire";
-
-type QuestionnaireFiltersProps = {
-  filters: Filters;
+type ListFiltersProps = {
+  /** List page the filters belong to ("Limpar" goes back to it). */
+  basePath: string;
+  query: string;
+  categoryId: string | null;
   categories: ReadonlyArray<{ value: string; label: string }>;
+  searchPlaceholder: string;
 };
 
-/** Plain GET form: the filters live in the URL (?q=&categoria=), so results can be shared and reloaded. */
-export function QuestionnaireFilters({ filters, categories }: QuestionnaireFiltersProps) {
-  const active = filters.query.trim() !== "" || filters.categoryId !== null;
+/**
+ * Search + category filter for admin lists. Plain GET form: the filters live
+ * in the URL (?q=&categoria=), so results can be shared and reloaded.
+ */
+export function ListFilters({ basePath, query, categoryId, categories, searchPlaceholder }: ListFiltersProps) {
+  const active = query.trim() !== "" || categoryId !== null;
 
   return (
     <form method="get" role="search" className="flex flex-wrap items-end gap-3">
@@ -18,18 +23,14 @@ export function QuestionnaireFilters({ filters, categories }: QuestionnaireFilte
         <input
           type="search"
           name="q"
-          defaultValue={filters.query}
-          placeholder="Título em qualquer idioma"
+          defaultValue={query}
+          placeholder={searchPlaceholder}
           className="w-64 rounded-md border border-zinc-300 px-3 py-2 font-normal"
         />
       </label>
       <label className="flex flex-col gap-1 text-sm font-medium">
         Categoria
-        <select
-          name="categoria"
-          defaultValue={filters.categoryId ?? ""}
-          className="rounded-md border border-zinc-300 bg-white px-3 py-2 font-normal"
-        >
+        <select name="categoria" defaultValue={categoryId ?? ""} className="rounded-md border border-zinc-300 bg-white px-3 py-2 font-normal">
           <option value="">Todas</option>
           {categories.map((category) => (
             <option key={category.value} value={category.value}>
@@ -42,7 +43,7 @@ export function QuestionnaireFilters({ filters, categories }: QuestionnaireFilte
         Filtrar
       </button>
       {active && (
-        <Link href="/questionarios" className="py-2 text-sm text-zinc-600 underline">
+        <Link href={basePath} className="py-2 text-sm text-zinc-600 underline">
           Limpar
         </Link>
       )}

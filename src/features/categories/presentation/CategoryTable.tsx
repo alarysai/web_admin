@@ -2,14 +2,14 @@ import Link from "next/link";
 
 import { StatusBadge } from "@/components/ui/StatusBadge";
 
-import { CATEGORY_STATUS_LABELS, type QuestionnaireCategory } from "../domain/category";
+import { CATEGORY_STATUS_LABELS, type Category } from "../domain/category";
 
-export function CategoryTable({ categories }: { categories: QuestionnaireCategory[] }) {
+export function CategoryTable({ categories, basePath }: { categories: Category[]; basePath: string }) {
   if (categories.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-600">
         Nenhuma categoria cadastrada ainda.{" "}
-        <Link href="/categorias/nova" className="underline">
+        <Link href={`${basePath}/nova`} className="underline">
           Criar a primeira
         </Link>
       </div>
@@ -30,7 +30,7 @@ export function CategoryTable({ categories }: { categories: QuestionnaireCategor
         {categories.map((category) => (
           <tr key={category.id} className="border-b border-zinc-100">
             <td className="py-2 pr-4">
-              <Link href={`/categorias/${category.id}`} className="font-medium underline-offset-2 hover:underline">
+              <Link href={`${basePath}/${category.id}`} className="font-medium underline-offset-2 hover:underline">
                 {category.name.pt || "(sem nome)"}
               </Link>
             </td>

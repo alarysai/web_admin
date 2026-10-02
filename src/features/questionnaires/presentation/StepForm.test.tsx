@@ -41,6 +41,10 @@ function renderForm(props: Partial<Parameters<typeof StepForm>[0]> = {}) {
         { id: "s5", label: "#5 · Último" },
         { id: "s6", label: "#6 · Extra" },
       ]}
+      tipChoices={[
+        { value: "t1", label: "Use fontes confiáveis" },
+        { value: "t2", label: "Cite o autor (inativa)" },
+      ]}
       action={action}
       {...props}
     />,
@@ -159,5 +163,30 @@ describe("StepForm jumps", () => {
     renderForm({ step: { ...saved, nextStepId: "ghost" }, defaultOrder: 2 });
     expect(screen.getByLabelText("Próximo passo")).toHaveValue("ghost");
     expect(screen.getByRole("option", { name: "Passo inexistente (ghost)" })).toBeInTheDocument();
+  });
+});
+
+describe("StepForm tip link", () => {
+  it("lets the info flag link to a tip", async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await user.click(screen.getByLabelText(/tem uma informação booleana/));
+    const select = screen.getByLabelText("Dica relacionada");
+    expect(within(select).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "Nenhuma dica",
+      "Use fontes confiáveis",
+      "Cite o autor (inativa)",
+    ]);
+    await user.selectOptions(select, "t2");
+    expect(select).toHaveValue("t2");
+  });
+
+  it("keeps a linked tip that no longer exists visible", () => {
+    renderForm({
+      step: { ...saved, infoFlag: { label: { pt: "Isso é ético?", en: null, es: null }, value: true, tipId: "gone" } },
+      defaultOrder: 2,
+    });
+    expect(screen.getByLabelText("Dica relacionada")).toHaveValue("gone");
+    expect(screen.getByRole("option", { name: "Dica inexistente (gone)" })).toBeInTheDocument();
   });
 });

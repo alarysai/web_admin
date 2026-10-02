@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { listCategories } from "@/features/questionnaire-categories/data/categories-repository";
-import { sortCategories } from "@/features/questionnaire-categories/domain/category";
+import { listCategories } from "@/features/categories/data/categories-repository";
+import { categoryOptions } from "@/features/categories/domain/category";
 import { findQuestionnaire } from "@/features/questionnaires/data/questionnaires-repository";
 import { listSteps } from "@/features/questionnaires/data/steps-repository";
 import { QUESTIONNAIRE_STATUS_LABELS } from "@/features/questionnaires/domain/schemas";
@@ -25,7 +25,7 @@ export default async function EditQuestionnairePage({ params, searchParams }: Pa
   const { id } = await params;
   const [questionnaire, categories, steps, query] = await Promise.all([
     findQuestionnaire(id),
-    listCategories(),
+    listCategories("questionnaire"),
     listSteps(id),
     searchParams,
   ]);
@@ -54,7 +54,7 @@ export default async function EditQuestionnairePage({ params, searchParams }: Pa
       />
       <QuestionnaireForm
         questionnaire={questionnaire}
-        categories={sortCategories(categories).map((category) => ({ value: category.id, label: category.name.pt }))}
+        categories={categoryOptions(categories)}
         action={saveQuestionnaireAction.bind(null, questionnaire.id)}
         initialState={flash ? formSuccess(flash) : undefined}
       />

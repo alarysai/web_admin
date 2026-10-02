@@ -29,6 +29,6 @@ describe("AdminNav", () => {
     render(<AdminNav />);
     expect(screen.getByRole("link", { name: "Questionários" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Início" })).not.toHaveAttribute("aria-current");
-    expect(screen.getByRole("link", { name: "Categorias" })).toHaveAttribute("href", "/categorias");
+    expect(screen.getByRole("link", { name: "Categorias de questionário" })).toHaveAttribute("href", "/categorias");
   });
 });
