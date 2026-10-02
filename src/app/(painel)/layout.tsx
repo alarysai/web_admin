@@ -1,3 +1,4 @@
+import { AdminNav } from "@/components/layout/AdminNav";
 import { LogoutButton } from "@/features/auth/presentation/LogoutButton";
 import { requireAdmin } from "@/features/auth/server/current-admin";
 
@@ -14,7 +15,12 @@ export default async function PainelLayout({ children }: LayoutProps<"/">) {
           <LogoutButton />
         </div>
       </header>
-      <main className="flex flex-1 flex-col gap-4 p-6">{children}</main>
+      <div className="flex flex-1">
+        <aside className="w-52 shrink-0 border-r border-zinc-200 p-3">
+          <AdminNav />
+        </aside>
+        <main className="flex flex-1 flex-col gap-6 p-6">{children}</main>
+      </div>
     </div>
   );
 }

@@ -30,8 +30,12 @@ src/
   proxy.ts                # checagem rápida do cookie de sessão → redireciona para /login
   app/
     login/page.tsx        # tela de login (pública)
-    (painel)/layout.tsx   # exige admin ativo (requireAdmin) + cabeçalho com "Sair"
+    (painel)/layout.tsx   # exige admin ativo (requireAdmin) + cabeçalho + menu lateral
     (painel)/page.tsx     # início do painel
+    (painel)/loading.tsx  # estado de carregamento das páginas do painel
+    (painel)/error.tsx    # erro ao carregar (ex.: Firestore fora) com "Tentar de novo"
+    (painel)/questionarios/            # lista (?q=&categoria=), novo/, [id]/
+    (painel)/categorias/               # lista, nova/, [id]/
     api/health/route.ts   # GET /api/health: testa o Admin SDK → Firestore
     api/session/route.ts  # POST cria a sessão do admin · DELETE faz logout
   features/auth/
@@ -40,8 +44,19 @@ src/
                           # admins-repository (Firestore), admin-sign-in (navegador)
     server/               # session-cookie (nome/opções), current-admin (getCurrentAdmin/requireAdmin)
     presentation/         # LoginForm, LogoutButton, mensagens de erro
+  features/questionnaires/
+    domain/               # schemas Zod (questionário, passo, opção), filtro/busca da lista
+    data/                 # questionnaires-repository (Admin SDK) + mapper defensivo
+    server/               # saveQuestionnaire (regra testável) + actions.ts (Server Action)
+    presentation/         # QuestionnaireForm, QuestionnaireTable, QuestionnaireFilters
+  features/questionnaire-categories/   # mesma divisão: domain, data, server, presentation
   components/
     FirebaseStatus.tsx    # status do SDK cliente
+    layout/               # AdminNav (menu lateral), PageHeader
+    form/                 # TextField, SelectField, LocalizedTextFields (PT/EN/ES), FormMessage
+    ui/                   # StatusBadge
+  lib/content/            # LocalizedText (schema, idiomas completos, busca sem acento), leitura defensiva do Firestore
+  lib/forms/              # FormState das Server Actions, leitura de FormData, valores iniciais
   lib/firebase/
     config.ts             # leitura e validação das variáveis de ambiente (funções puras)
     config.test.ts        # testes de config.ts
@@ -103,6 +118,36 @@ A coleção `admins` é gerenciada pelo console. As regras do Firestore negam qu
 | `active` | boolean | `true` |
 
 Para tirar o acesso, mude `active` para `false` ou apague o documento. Qualquer valor diferente de `active: true` (ausente, `"true"` como texto, `1`) **nega** o acesso.
+
+## Cadastros do painel
+
+### Como um cadastro funciona
+
+| Camada | O que faz |
+| --- | --- |
+| Página (Server Component) | Lê do Firestore com o Admin SDK (`data/*-repository.ts`) e passa os dados para o formulário. |
+| Formulário (Client Component) | `useActionState` com a Server Action. Mostra o erro de cada campo, mantém o que foi digitado e desabilita o botão durante o envio. |
+| Server Action (`server/actions.ts`) | Chama a regra (`server/save-*.ts`), faz `revalidatePath` e redireciona depois de criar. |
+| Regra (`server/save-*.ts`) | **Confere o admin a cada chamada** (`getCurrentAdmin()`), valida com o schema Zod do `domain/` e só então grava. Recebe as dependências por parâmetro para ser testada sem Firestore. |
+
+Server Actions podem ser chamadas por um POST direto, sem passar pela tela. Por isso, **toda Server Action nova precisa conferir o admin dentro dela**. A proteção das páginas não basta.
+
+### Categorias de questionário (`/categorias`)
+
+Nome em PT/EN/ES (o português é obrigatório), ordem e status (ativa/inativa). Só as ativas aparecem nos apps. O ícone entra junto com o upload de imagens.
+
+### Questionários (`/questionarios`)
+
+- **Lista:** busca pelo título em qualquer idioma, sem diferenciar maiúsculas nem acentos (`?q=`), e filtro por categoria (`?categoria=`). Os filtros ficam na URL. Mostra categoria, idiomas completos, status, ordem e data da última alteração. Há uma mensagem própria para "nenhum cadastrado" e para "nenhum resultado".
+- **Criar e editar:** título (PT obrigatório; EN/ES opcionais), descrição opcional, categoria (precisa existir) e ordem. Todo questionário novo nasce como **rascunho**. O campo `languages` é calculado ao salvar com base no título e na descrição. Os passos passam a entrar nesse cálculo junto com o editor de passos.
+- Sem nenhuma categoria cadastrada, o botão "Novo questionário" some e a lista mostra um aviso com link para criar uma.
+
+### Entregas da 3.2
+
+1. ✅ Layout base, schemas Zod, categorias, lista com busca e filtro, criar e editar questionário.
+2. Editor de passos e opções, com upload de imagens (exige o Storage ativo, plano Blaze).
+3. Saltos com validação (ID existente, sem ciclo) e pré-visualização do fluxo.
+4. Publicar, despublicar, duplicar e excluir.
 
 ### Modelo de dados e regras de segurança
 
@@ -182,6 +227,14 @@ npm run test:rules # regras do Firestore/Storage no emulador (exige Java 21+)
 - `features/auth/data/admin-sign-in.test.ts`: tradução dos erros do Firebase Auth.
 - `features/auth/presentation/LoginForm.test.tsx` e `LogoutButton.test.tsx` (jsdom): sucesso com redirect, cada mensagem de erro, botão desabilitado durante o envio, campos obrigatórios, logout mesmo com falha.
 - `src/proxy.test.ts`: sessão válida passa, sem sessão ou cookie forjado → `/login?next=`, e o **matcher** (quais caminhos são protegidos ou ignorados).
+- `lib/content/*.test.ts`: `LocalizedText` (PT obrigatório, traduções vazias viram `null`, idiomas completos, idioma reserva), busca sem acento e leitura defensiva de documentos.
+- `lib/forms/forms.test.ts`: leitura de `FormData` (inteiros, textos traduzidos, campos opcionais), erros do Zod por campo e valores iniciais.
+- `features/questionnaires/domain/schemas.test.ts`: questionário (título, categoria, ordem), opção (texto ou imagem), passo (texto ou imagem; vídeo com link `https` e sem opções; pergunta com ao menos uma opção; IDs de opção únicos; informação booleana).
+- `features/questionnaires/domain/questionnaire.test.ts`: busca em qualquer idioma, filtro por categoria, ordenação, leitura de `?q=` e `?categoria=`.
+- `features/questionnaires/data/questionnaire-mapper.test.ts`: documento completo, status desconhecido vira rascunho, campos ausentes, idiomas desconhecidos.
+- `features/questionnaires/server/save-questionnaire.test.ts`: criar, editar, sem sessão de admin, erros de campo com os valores digitados de volta, categoria inexistente, questionário apagado no meio.
+- `features/questionnaire-categories/categories.test.ts`: schema, ordenação, mapper e a regra de salvar.
+- `QuestionnaireForm.test.tsx`, `QuestionnaireTable.test.tsx` e `components/layout/AdminNav.test.tsx` (jsdom): formulário novo e de edição, envio, erros de campo mantendo o que foi digitado, botão desabilitado ao salvar, linhas da tabela, estados vazios e menu marcando a seção atual.
 - `src/lib/firebase/config.test.ts`: validação da config do cliente (chaves ausentes ou em branco, espaços nas pontas) e das credenciais do Admin SDK (conversão de `\n`, aspas e vírgula copiadas do JSON, quebras de linha do Windows, JSON inteiro colado, valor que não é PEM, variáveis ausentes).
 - Verificação manual: sem sessão, qualquer página do painel redireciona para `/login`. Com um admin cadastrado, o login leva ao painel, o cabeçalho mostra o e-mail e **Sair** volta para `/login`. No painel, a página inicial mostra "Firebase conectado ao projeto alarysai-b6e85", e `/api/health` responde `ok` quando a service account está configurada.
 

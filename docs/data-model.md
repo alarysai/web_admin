@@ -81,7 +81,7 @@ users/{uid}                                   perfil e saldo de créditos
 | `description` | `LocalizedText \| null` | não | Texto de apresentação. |
 | `categoryId` | `string` | sim | ID em `questionnaireCategories`. |
 | `image` | `ImageRef \| null` | não | Capa/ícone na grade. |
-| `languages` | `("pt" \| "en" \| "es")[]` | sim | Idiomas com tradução **completa** (título, passos e opções). Sempre contém `"pt"`. |
+| `languages` | `("pt" \| "en" \| "es")[]` | sim | Idiomas com tradução **completa** (título, passos e opções). Sempre contém `"pt"`. Calculado pelo painel ao salvar; por enquanto considera só o título e a descrição, e os passos entram com o editor de passos. |
 | `order` | `number` | sim | Posição dentro da categoria. |
 | `status` | `"draft" \| "published"` | sim | Rascunhos não aparecem nos apps. |
 | `publishedAt` | `Timestamp \| null` | não | Última publicação. |
