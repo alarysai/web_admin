@@ -53,9 +53,11 @@ src/
       storage.ts          #   getAdminStorage()
 firebase.json             # aponta para as regras e os índices (deploy via Firebase CLI)
 .firebaserc               # projeto padrão: alarysai-b6e85
-firestore.rules           # regras do Firestore (começam fechadas)
-storage.rules             # regras do Storage (começam fechadas)
-firestore.indexes.json
+firestore.rules           # regras do Firestore (ver docs/data-model.md)
+storage.rules             # regras do Storage (ver docs/data-model.md)
+firestore.indexes.json    # índices das consultas dos apps
+docs/data-model.md        # modelo de dados: coleções, campos, permissões, Storage
+rules-tests/              # testes das regras no emulador (npm run test:rules)
 ```
 
 ### Dois jeitos de acessar o Firebase
@@ -102,13 +104,21 @@ A coleção `admins` é gerenciada pelo console. As regras do Firestore negam qu
 
 Para tirar o acesso, mude `active` para `false` ou apague o documento. Qualquer valor diferente de `active: true` (ausente, `"true"` como texto, `1`) **nega** o acesso.
 
-### Regras de segurança
+### Modelo de dados e regras de segurança
 
-`firestore.rules` e `storage.rules` começam negando todo acesso pelo SDK cliente. Enquanto isso, o painel usa o Admin SDK. Quando um app (ou o próprio painel) precisar de acesso direto, abra a coleção ou o caminho específico nas regras e publique:
+O schema completo do Firestore e do Storage está em **[docs/data-model.md](docs/data-model.md)**: coleções, campos, quem lê e quem escreve, fluxo de saltos dos questionários e caminhos do Storage. As regras aplicam esse documento:
+
+- **Conteúdo** (questionários publicados, categorias, dicas e anunciantes ativos): leitura pública, até sem login; escrita só por admin ativo.
+- **`admins`**: inacessível pelo SDK cliente.
+- **`users/{uid}`**: o próprio usuário lê e grava só os campos de perfil. `creditBalance`, `history` e `credits` são escritos **só pelo servidor**, para que ninguém consiga se dar créditos.
+
+Ao mudar o modelo, atualize o documento, as regras e `rules-tests/` juntos, rode `npm run test:rules` e publique:
 
 ```bash
-firebase deploy --only firestore:rules,storage
+firebase deploy --only firestore:rules,firestore:indexes --project alarysai-b6e85
 ```
+
+As regras do Firestore e os índices foram publicados em 2026-10-02. As do **Storage** só podem ser publicadas depois que o Storage for ativado, porque ele exige o plano Blaze. Use `firebase deploy --only storage`; no primeiro deploy, o console pede permissão para as regras do Storage consultarem `admins` no Firestore.
 
 ## Configuração
 
@@ -153,10 +163,16 @@ As variáveis `NEXT_PUBLIC_*` entram no bundle **em tempo de build**. Se mudar a
 npm run dev        # http://localhost:3000
 npm run build
 npm run lint
-npm test           # Vitest
+npm test           # Vitest (unitários e componentes)
+npm run test:rules # regras do Firestore/Storage no emulador (exige Java 21+)
 ```
 
 ## Testes
+
+- **`npm test`**: testes unitários e de componentes (Vitest), sem rede.
+- **`npm run test:rules`**: sobe os emuladores do Firestore e do Storage (`firebase emulators:exec`, projeto `demo-alarysai-rules`, sem tocar em produção) e roda `rules-tests/` contra `firestore.rules` e `storage.rules`. Exige o Firebase CLI e **Java 21+** no `PATH`/`JAVA_HOME`. Nesta máquina o Java padrão é o 17; use o JBR 21: `JAVA_HOME=~/.jdks/jbr-21.0.10`.
+  - `firestore.rules.test.ts`: leitura pública só do conteúdo ativo ou publicado; consultas sem filtro de `status` são recusadas; só admin ativo escreve (status válido, tipo de passo válido); `admins` fechado; o usuário não se dá créditos nem grava campos fora do perfil; `history` e `credits` só leitura (o dono pode apagar o próprio histórico); isolamento entre usuários; coleções desconhecidas fechadas.
+  - `storage.rules.test.ts`: imagens de conteúdo com leitura pública e envio só por admin (imagem até 5 MB); avatar do próprio usuário (imagem até 2 MB); `generated` só leitura do dono; caminhos desconhecidos fechados.
 
 - `features/auth/domain/create-admin-session.test.ts`: admin ativo, token em branco, token inválido, usuário sem `admins/{uid}`, admin inativo.
 - `features/auth/domain/safe-redirect.test.ts`: caminhos aceitos e bloqueio de open redirect (`//`, URL absoluta, `\`, `/login`).
@@ -171,4 +187,4 @@ npm test           # Vitest
 
 ## Apps futuros
 
-Os apps Android/iOS devem ser registrados **no mesmo projeto Firebase `alarysai-b6e85`** (`firebase apps:create ANDROID|IOS --project alarysai-b6e85`). Assim, todos compartilham Auth, Firestore e Storage. Quando o schema do Firestore surgir, documente as coleções aqui e mantenha as regras em `firestore.rules` como fonte única.
+Os apps Android/iOS devem ser registrados **no mesmo projeto Firebase `alarysai-b6e85`** (`firebase apps:create ANDROID|IOS --project alarysai-b6e85`). Assim, todos compartilham Auth, Firestore e Storage. O schema que os apps consomem está em [docs/data-model.md](docs/data-model.md). Os apps devem sempre filtrar por `status` nas consultas de conteúdo, senão o Firestore recusa a consulta.

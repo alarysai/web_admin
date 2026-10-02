@@ -1,11 +1,47 @@
 rules_version = '2';
 
-// Ponto de partida fechado: nenhum acesso direto pelo SDK cliente.
-// Uploads do web admin passam pelo Admin SDK no servidor.
+// Caminhos e decisões: docs/data-model.md (seção Storage).
+// Testes: rules-tests/storage.rules.test.ts.
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} {
-      allow read, write: if false;
+
+    function signedIn() {
+      return request.auth != null;
     }
+
+    // Regra entre serviços: consulta admins/{uid} no Firestore.
+    function isAdmin() {
+      let adminPath = /databases/(default)/documents/admins/$(request.auth.uid);
+      return signedIn() && firestore.exists(adminPath) && firestore.get(adminPath).data.active == true;
+    }
+
+    function isImageUnder(maxBytes) {
+      return request.resource.contentType.matches('image/.*') && request.resource.size <= maxBytes;
+    }
+
+    // Imagens de conteúdo: leitura pública, envio só por admin.
+    match /content/{area}/{entityId}/{fileName} {
+      function knownArea() {
+        return area in ['questionnaires', 'questionnaireCategories', 'tips', 'advertisers'];
+      }
+
+      allow read: if knownArea();
+      allow create, update: if knownArea() && isAdmin() && isImageUnder(5 * 1024 * 1024);
+      allow delete: if knownArea() && isAdmin();
+    }
+
+    // Foto de perfil: só o próprio usuário.
+    match /users/{uid}/avatar/{fileName} {
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid && isImageUnder(2 * 1024 * 1024);
+    }
+
+    // Resultados de IA: gravados pelo servidor, lidos pelo dono.
+    match /users/{uid}/generated/{fileName} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Qualquer outro caminho continua fechado.
   }
 }

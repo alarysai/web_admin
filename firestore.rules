@@ -1,12 +1,118 @@
 rules_version = '2';
 
-// Ponto de partida fechado: nenhum acesso direto pelo SDK cliente.
-// O web admin acessa via Admin SDK (servidor), que ignora estas regras.
-// Abra coleções específicas aqui quando os apps precisarem ler/escrever.
+// Schema e decisões: docs/data-model.md. Testes: rules-tests/firestore.rules.test.ts.
+// O servidor do painel (Admin SDK) ignora estas regras; elas valem para os apps
+// e para o SDK cliente do navegador.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
+
+    // ---------- helpers ----------
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      let adminPath = /databases/$(database)/documents/admins/$(request.auth.uid);
+      return signedIn() && exists(adminPath) && get(adminPath).data.active == true;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isActive() {
+      return resource.data.status == 'active';
+    }
+
+    function hasValidActiveStatus() {
+      return request.resource.data.status in ['active', 'inactive'];
+    }
+
+    function questionnairePublished(questionnaireId) {
+      return get(/databases/$(database)/documents/questionnaires/$(questionnaireId)).data.status == 'published';
+    }
+
+    // ---------- conteúdo (leitura pública do que está publicado/ativo) ----------
+
+    match /questionnaireCategories/{categoryId} {
+      allow read: if isActive() || isAdmin();
+      allow create, update: if isAdmin() && hasValidActiveStatus();
+      allow delete: if isAdmin();
+    }
+
+    match /questionnaires/{questionnaireId} {
+      allow read: if resource.data.status == 'published' || isAdmin();
+      allow create, update: if isAdmin() && request.resource.data.status in ['draft', 'published'];
+      allow delete: if isAdmin();
+
+      match /steps/{stepId} {
+        allow read: if questionnairePublished(questionnaireId) || isAdmin();
+        allow create, update: if isAdmin() && request.resource.data.type in ['video', 'question'];
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /tipCategories/{categoryId} {
+      allow read: if isActive() || isAdmin();
+      allow create, update: if isAdmin() && hasValidActiveStatus();
+      allow delete: if isAdmin();
+    }
+
+    match /tips/{tipId} {
+      allow read: if isActive() || isAdmin();
+      allow create, update: if isAdmin() && hasValidActiveStatus();
+      allow delete: if isAdmin();
+    }
+
+    match /advertisers/{advertiserId} {
+      allow read: if isActive() || isAdmin();
+      allow create, update: if isAdmin() && hasValidActiveStatus();
+      allow delete: if isAdmin();
+    }
+
+    // ---------- administração (só servidor) ----------
+
+    match /admins/{uid} {
       allow read, write: if false;
+    }
+
+    // ---------- dados do usuário ----------
+
+    match /users/{uid} {
+      // Campos que o próprio usuário pode gravar. creditBalance é só do servidor.
+      function onlyProfileFields() {
+        return request.resource.data.keys().hasOnly(
+          ['displayName', 'photoUrl', 'language', 'createdAt', 'updatedAt']);
+      }
+
+      function profileChangesOnly() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+          ['displayName', 'photoUrl', 'language', 'updatedAt']);
+      }
+
+      function validLanguage() {
+        return !('language' in request.resource.data)
+          || request.resource.data.language in ['pt', 'en', 'es'];
+      }
+
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) && onlyProfileFields() && validLanguage();
+      allow update: if isOwner(uid) && profileChangesOnly() && validLanguage();
+      allow delete: if false;
+
+      // Escrito pelo servidor ao processar a geração; o usuário lê e pode apagar.
+      match /history/{entryId} {
+        allow read: if isOwner(uid) || isAdmin();
+        allow delete: if isOwner(uid);
+        allow create, update: if false;
+      }
+
+      // Extrato de créditos: só o servidor escreve.
+      match /credits/{transactionId} {
+        allow read: if isOwner(uid) || isAdmin();
+        allow write: if false;
+      }
     }
   }
 }
