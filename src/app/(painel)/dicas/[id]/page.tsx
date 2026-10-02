@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 
+import { ActivationActions } from "@/components/form/ActivationActions";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { listCategories } from "@/features/categories/data/categories-repository";
 import { categoryOptions } from "@/features/categories/domain/category";
 import { findTip, findTipUsages } from "@/features/tips/data/tips-repository";
 import { TIP_STATUS_LABELS } from "@/features/tips/domain/tip";
-import { TipActions } from "@/features/tips/presentation/TipActions";
 import { TipForm } from "@/features/tips/presentation/TipForm";
 import { activateTipAction, deactivateTipAction, deleteTipAction, saveTipAction } from "@/features/tips/server/actions";
 import { describeUsages } from "@/features/tips/server/tip-lifecycle";
@@ -26,8 +26,9 @@ export default async function EditTipPage({ params, searchParams }: PageProps<"/
         <span>· Idiomas completos: {tip.languages.join(", ").toUpperCase()}</span>
         <span>· {usages.length > 0 ? `Usada em: ${describeUsages(usages)}` : "Não está ligada a nenhum passo."}</span>
       </div>
-      <TipActions
-        status={tip.status}
+      <ActivationActions
+        active={tip.status === "active"}
+        subject="esta dica"
         activate={activateTipAction.bind(null, tip.id)}
         deactivate={deactivateTipAction.bind(null, tip.id)}
         remove={deleteTipAction.bind(null, tip.id)}

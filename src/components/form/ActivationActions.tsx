@@ -2,26 +2,33 @@
 
 import { useState, useTransition } from "react";
 
-import { ActionResultMessage } from "@/components/form/ActionResultMessage";
 import type { ActionResult } from "@/lib/forms/action-result";
 
-import type { TipStatus } from "../domain/tip";
+import { ActionResultMessage } from "./ActionResultMessage";
 
 type Action = () => Promise<ActionResult>;
 
-type TipActionsProps = {
-  status: TipStatus;
+type ActivationActionsProps = {
+  active: boolean;
+  /** Names the thing in the confirmations ("esta dica", "este anunciante"). */
+  subject: string;
   activate: Action;
   deactivate: Action;
   remove: Action;
   confirm?: (message: string) => boolean;
 };
 
-/** Activate/deactivate and delete, with the server's answer below the buttons. */
-export function TipActions({ status, activate, deactivate, remove, confirm = (message) => window.confirm(message) }: TipActionsProps) {
+/** Activate/deactivate and delete for content with an active/inactive status, with the server's answer below. */
+export function ActivationActions({
+  active,
+  subject,
+  activate,
+  deactivate,
+  remove,
+  confirm = (message) => window.confirm(message),
+}: ActivationActionsProps) {
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
-  const active = status === "active";
 
   function run(action: Action, question?: string) {
     if (question && !confirm(question)) return;
@@ -35,8 +42,8 @@ export function TipActions({ status, activate, deactivate, remove, confirm = (me
   const button = "rounded-md border px-3 py-1.5 text-sm disabled:opacity-50";
 
   return (
-    <section aria-labelledby="tip-actions-heading" className="flex max-w-2xl flex-col gap-3 rounded-md border border-zinc-200 p-4">
-      <h2 id="tip-actions-heading" className="text-sm font-semibold">
+    <section aria-labelledby="activation-heading" className="flex max-w-2xl flex-col gap-3 rounded-md border border-zinc-200 p-4">
+      <h2 id="activation-heading" className="text-sm font-semibold">
         Status
       </h2>
       <div className="flex flex-wrap items-center gap-2">
@@ -44,7 +51,7 @@ export function TipActions({ status, activate, deactivate, remove, confirm = (me
           <button
             type="button"
             disabled={pending}
-            onClick={() => run(deactivate, "Desativar esta dica? Ela sai dos apps na hora.")}
+            onClick={() => run(deactivate, `Desativar ${subject}? Sai dos apps na hora.`)}
             className={`${button} border-zinc-300`}
           >
             Desativar
@@ -57,7 +64,7 @@ export function TipActions({ status, activate, deactivate, remove, confirm = (me
         <button
           type="button"
           disabled={pending}
-          onClick={() => run(remove, "Excluir esta dica? Não dá para desfazer.")}
+          onClick={() => run(remove, `Excluir ${subject}? Não dá para desfazer.`)}
           className={`${button} border-red-300 text-red-700`}
         >
           Excluir

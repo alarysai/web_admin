@@ -5,12 +5,12 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { ActivationActions } from "@/components/form/ActivationActions";
 import { ListFilters } from "@/components/layout/ListFilters";
 import { actionFailure, actionSuccess } from "@/lib/forms/action-result";
 import { formError, formSuccess } from "@/lib/forms/form-state";
 
 import type { Tip } from "../domain/tip";
-import { TipActions } from "./TipActions";
 import { TipForm, type TipFormAction } from "./TipForm";
 import { TipTable } from "./TipTable";
 
@@ -70,7 +70,7 @@ describe("TipTable", () => {
   });
 });
 
-describe("TipActions", () => {
+describe("ActivationActions (tips)", () => {
   const actions = () => ({
     activate: vi.fn().mockResolvedValue(actionSuccess("Dica ativada: já aparece nos apps.")),
     deactivate: vi.fn().mockResolvedValue(actionSuccess("Dica desativada: saiu dos apps.", ["Questionários publicados…"])),
@@ -79,7 +79,7 @@ describe("TipActions", () => {
 
   it("activates an inactive tip", async () => {
     const a = actions();
-    render(<TipActions status="inactive" confirm={() => true} {...a} />);
+    render(<ActivationActions active={false} subject="esta dica" confirm={() => true} {...a} />);
     await userEvent.setup().click(screen.getByRole("button", { name: "Ativar" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Dica ativada");
   });
@@ -87,22 +87,22 @@ describe("TipActions", () => {
   it("asks before deactivating and shows the warnings", async () => {
     const a = actions();
     const confirm = vi.fn(() => true);
-    render(<TipActions status="active" confirm={confirm} {...a} />);
+    render(<ActivationActions active subject="esta dica" confirm={confirm} {...a} />);
     await userEvent.setup().click(screen.getByRole("button", { name: "Desativar" }));
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("sai dos apps"));
+    expect(confirm).toHaveBeenCalledWith("Desativar esta dica? Sai dos apps na hora.");
     expect(await screen.findByRole("status")).toHaveTextContent("Questionários publicados…");
   });
 
   it("shows where the tip is used when deleting is blocked", async () => {
     const a = actions();
-    render(<TipActions status="active" confirm={() => true} {...a} />);
+    render(<ActivationActions active subject="esta dica" confirm={() => true} {...a} />);
     await userEvent.setup().click(screen.getByRole("button", { name: "Excluir" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Ética na IA (publicado)");
   });
 
   it("does nothing when the admin cancels the delete", async () => {
     const a = actions();
-    render(<TipActions status="active" confirm={() => false} {...a} />);
+    render(<ActivationActions active subject="esta dica" confirm={() => false} {...a} />);
     await userEvent.setup().click(screen.getByRole("button", { name: "Excluir" }));
     expect(a.remove).not.toHaveBeenCalled();
   });
@@ -110,14 +110,23 @@ describe("TipActions", () => {
 
 describe("ListFilters", () => {
   it("keeps the current filters and offers to clear them", () => {
-    render(<ListFilters basePath="/dicas" query="etica" categoryId="etica" categories={categories} searchPlaceholder="Texto" />);
+    render(
+      <ListFilters
+        basePath="/dicas"
+        query="etica"
+        searchPlaceholder="Texto"
+        select={{ param: "categoria", label: "Categoria", allLabel: "Todas", value: "etica", options: categories }}
+      />,
+    );
     expect(screen.getByRole("searchbox")).toHaveValue("etica");
     expect(screen.getByLabelText("Categoria")).toHaveValue("etica");
     expect(screen.getByRole("link", { name: "Limpar" })).toHaveAttribute("href", "/dicas");
   });
 
   it("hides Limpar without filters", () => {
-    render(<ListFilters basePath="/dicas" query="" categoryId={null} categories={categories} searchPlaceholder="Texto" />);
+    render(
+      <ListFilters basePath="/dicas" query="" searchPlaceholder="Texto" select={{ param: "categoria", label: "Categoria", allLabel: "Todas", value: null, options: categories }} />,
+    );
     expect(screen.queryByRole("link", { name: "Limpar" })).not.toBeInTheDocument();
   });
 });

@@ -43,9 +43,8 @@ export default async function QuestionnairesPage({ searchParams }: PageProps<"/q
       <ListFilters
         basePath="/questionarios"
         query={filters.query}
-        categoryId={filters.categoryId}
-        categories={categoryOptions(categories)}
         searchPlaceholder="Título em qualquer idioma"
+        select={{ param: "categoria", label: "Categoria", allLabel: "Todas", value: filters.categoryId, options: categoryOptions(categories) }}
       />
       <QuestionnaireTable questionnaires={visible} categoryNames={categoryNames} filtered={filtered} />
     </>

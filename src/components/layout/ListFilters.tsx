@@ -1,20 +1,29 @@
 import Link from "next/link";
 
+export type ListFilterSelect = {
+  /** URL parameter, e.g. "categoria" or "tipo". */
+  param: string;
+  label: string;
+  /** First option, meaning no filter ("Todas", "Todos"). */
+  allLabel: string;
+  value: string | null;
+  options: ReadonlyArray<{ value: string; label: string }>;
+};
+
 type ListFiltersProps = {
   /** List page the filters belong to ("Limpar" goes back to it). */
   basePath: string;
   query: string;
-  categoryId: string | null;
-  categories: ReadonlyArray<{ value: string; label: string }>;
   searchPlaceholder: string;
+  select: ListFilterSelect;
 };
 
 /**
- * Search + category filter for admin lists. Plain GET form: the filters live
- * in the URL (?q=&categoria=), so results can be shared and reloaded.
+ * Search + one select filter for admin lists. Plain GET form: the filters
+ * live in the URL (?q=&<param>=), so results can be shared and reloaded.
  */
-export function ListFilters({ basePath, query, categoryId, categories, searchPlaceholder }: ListFiltersProps) {
-  const active = query.trim() !== "" || categoryId !== null;
+export function ListFilters({ basePath, query, searchPlaceholder, select }: ListFiltersProps) {
+  const active = query.trim() !== "" || select.value !== null;
 
   return (
     <form method="get" role="search" className="flex flex-wrap items-end gap-3">
@@ -29,12 +38,12 @@ export function ListFilters({ basePath, query, categoryId, categories, searchPla
         />
       </label>
       <label className="flex flex-col gap-1 text-sm font-medium">
-        Categoria
-        <select name="categoria" defaultValue={categoryId ?? ""} className="rounded-md border border-zinc-300 bg-white px-3 py-2 font-normal">
-          <option value="">Todas</option>
-          {categories.map((category) => (
-            <option key={category.value} value={category.value}>
-              {category.label}
+        {select.label}
+        <select name={select.param} defaultValue={select.value ?? ""} className="rounded-md border border-zinc-300 bg-white px-3 py-2 font-normal">
+          <option value="">{select.allLabel}</option>
+          {select.options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>

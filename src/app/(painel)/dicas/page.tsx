@@ -40,9 +40,8 @@ export default async function TipsPage({ searchParams }: PageProps<"/dicas">) {
       <ListFilters
         basePath="/dicas"
         query={filters.query}
-        categoryId={filters.categoryId}
-        categories={categoryOptions(categories)}
         searchPlaceholder="Texto em qualquer idioma"
+        select={{ param: "categoria", label: "Categoria", allLabel: "Todas", value: filters.categoryId, options: categoryOptions(categories) }}
       />
       <TipTable tips={filterTips(tips, filters)} categoryNames={categoryNames} filtered={filters.query.trim() !== "" || filters.categoryId !== null} />
     </>

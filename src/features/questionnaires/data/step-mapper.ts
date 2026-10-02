@@ -1,14 +1,7 @@
-import { asEnum, asNumber, asOptionalLocalizedText, asString } from "@/lib/content/firestore-mapping";
+import { asEnum, asImage, asNumber, asOptionalLocalizedText, asString } from "@/lib/content/firestore-mapping";
 
 import { STEP_TYPES, type InfoFlag, type StepOption } from "../domain/schemas";
 import type { StepRecord } from "../domain/steps";
-
-function asImage(value: unknown) {
-  const raw = value as { path?: unknown; url?: unknown } | null;
-  const path = asString(raw?.path);
-  const url = asString(raw?.url);
-  return path && url ? { path, url } : null;
-}
 
 function asOption(value: unknown, index: number): StepOption {
   const raw = (value ?? {}) as Record<string, unknown>;

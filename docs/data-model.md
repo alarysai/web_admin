@@ -164,7 +164,7 @@ Para decidir o passo seguinte, o app usa o primeiro destes que existir:
 | --- | --- | --- | --- |
 | `name` | `string \| null` | * | Nome do anunciante (não traduzido). |
 | `image` | `ImageRef \| null` | * | Logo/banner. |
-| `type` | `string` | sim | Tipo do anunciante. **Valores a definir** (ver [Pendências](#pendências)). |
+| `type` | `string` | sim | Tipo do anunciante, em **texto livre** (até 40 caracteres, sem espaços extras). Para os apps, compare sem diferenciar maiúsculas e acentos. Uma lista fixa pode substituir o texto livre no futuro (ver [Pendências](#pendências)). |
 | `link` | `string` | sim | URL `https://` aberta ao tocar no anúncio. |
 | `order` | `number` | sim | |
 | `status` | `"active" \| "inactive"` | sim | |
@@ -255,6 +255,6 @@ Consultas previstas dos apps (em `firestore.indexes.json`):
 
 Decisões de produto ainda em aberto (o modelo acima usa o valor indicado até a definição):
 
-1. **Tipos de anunciante** (`advertisers.type`): lista de valores ainda não definida — campo texto por enquanto.
+1. **Tipos de anunciante** (`advertisers.type`): decidido manter **texto livre** por enquanto (2026-10-02). O painel sugere os tipos já usados e agrupa as variações de grafia no filtro.
 2. **`infoFlag`**: modelado como uma resposta sim/não definida pelo admin por passo, com dica opcional. Se a intenção for o **usuário** responder, o campo muda.
 3. **Planos** (aba "Planos" do app): ciclo mensal, créditos por plano e renovação ainda não modelados — entram com a integração de pagamento.

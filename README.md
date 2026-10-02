@@ -38,6 +38,7 @@ src/
     (painel)/categorias/               # categorias de questionário: lista, nova/, [id]/
     (painel)/categorias-dicas/         # categorias de dicas: lista, nova/, [id]/
     (painel)/dicas/                    # lista (?q=&categoria=), nova/, [id]/
+    (painel)/anunciantes/              # lista (?q=&tipo=), novo/, [id]/
     api/health/route.ts   # GET /api/health: testa o Admin SDK → Firestore
     api/session/route.ts  # POST cria a sessão do admin · DELETE faz logout
   features/auth/
@@ -53,14 +54,17 @@ src/
     presentation/         # QuestionnaireForm/Table/Filters, QuestionnaireActions, StepForm, StepOptionsEditor, StepList, DeleteStepButton, FlowMap, FlowSimulator
   features/categories/                 # categorias genéricas por tipo (questionnaire | tip): domain, data, server,
                                        # presentation (CategoryScreens compartilhadas pelas duas seções)
+  features/advertisers/                # anunciantes: domain (schema, tipos, filtro), data, server (salvar,
+                                       # ativar/desativar/excluir), presentation (AdvertiserForm, AdvertiserTable)
   features/tips/                       # dicas: domain (schema, filtro), data (repositório, usos), server (salvar,
                                        # ativar/desativar/excluir), presentation (TipForm, TipTable, TipActions)
   components/
     FirebaseStatus.tsx    # status do SDK cliente
-    layout/               # AdminNav (menu lateral), PageHeader, ListFilters (busca + categoria, na URL)
-    form/                 # TextField, TextAreaField, SelectField, LocalizedTextFields (PT/EN/ES), FormMessage, ActionResultMessage
+    layout/               # AdminNav (menu lateral), PageHeader, ListFilters (busca + um filtro, na URL)
+    form/                 # TextField, TextAreaField, SelectField, LocalizedTextFields (PT/EN/ES), FormMessage,
+                          # ActionResultMessage, ActivationActions (ativar/desativar/excluir)
     ui/                   # StatusBadge
-  lib/content/            # LocalizedText (schema, idiomas completos, busca sem acento), leitura defensiva do Firestore
+  lib/content/            # LocalizedText (schema, idiomas completos, busca sem acento), ImageRef, leitura defensiva do Firestore
   lib/forms/              # FormState e ActionResult das Server Actions, leitura de FormData, valores iniciais
   lib/firebase/
     config.ts             # leitura e validação das variáveis de ambiente (funções puras)
@@ -199,6 +203,20 @@ Enquanto está publicado, o questionário continua editável. Cada salvamento de
 - **Onde é usada:** consulta em grupo de coleções (`collectionGroup("steps")` com `infoFlag.tipId`), que exige o índice em `firestore.indexes.json` → `fieldOverrides`.
 - **Sem imagem por enquanto:** `image: null` até o Storage ser ativado.
 
+### Anunciantes (`/anunciantes`)
+
+- **Lista:** busca por nome ou link (`?q=`) e filtro por tipo (`?tipo=`). Mostra tipo, link (abre em outra aba), status e ordem, com estados vazios próprios.
+- **Criar e editar:**
+  - **Nome:** a regra é "nome **ou** imagem", e ela está no schema. Enquanto não há upload, na prática o nome é obrigatório.
+  - **Tipo:** texto livre, até 40 caracteres. Espaços extras são removidos ao salvar, e o campo sugere os tipos já usados (`datalist`).
+  - **Link:** URL **https://** válida. `http://`, endereço sem protocolo e `javascript:` são recusados.
+  - **Ordem:** um anunciante novo entra depois do último.
+  - **Todo anunciante novo nasce inativo.**
+- **Tipos no filtro:** "Banner", "banner " e "BANNER" contam como um tipo só (sem diferenciar maiúsculas, acentos nem espaços). Aparece a primeira grafia encontrada.
+- **Ativar:** confere de novo os dados salvos, para que um documento antigo ou malformado não vá para o app. Se algo estiver errado, lista o que corrigir.
+- **Desativar e excluir:** pedem confirmação. Nada referencia anunciantes, então excluir não tem outra restrição.
+- **Imagem:** o formulário ainda não envia imagem. Ao editar, uma imagem já gravada é **preservada**, não apagada.
+
 ### Entregas da 3.2
 
 1. ✅ Layout base, schemas Zod, categorias, lista com busca e filtro, criar e editar questionário.
@@ -292,6 +310,8 @@ npm run test:rules # regras do Firestore/Storage no emulador (exige Java 21+)
 - `features/questionnaires/server/save-questionnaire.test.ts`: criar, editar, sem sessão de admin, erros de campo com os valores digitados de volta, categoria inexistente, questionário apagado no meio.
 - `features/categories/categories.test.ts`: schema, ordenação, opções com "(inativa)", mapper e a regra de salvar.
 - `features/tips/tips.test.ts`: schema, busca e filtro, rótulo, mapper, salvar (sessão, campos, categoria inexistente, dica apagada), ativar (categoria inexistente ou inativa), desativar (aviso só para publicados), excluir (bloqueado quando usada), descrição dos usos.
+- `features/advertisers/advertisers.test.ts`: schema (nome ou imagem, link https e links recusados, tipo arrumado e limite), tipos sem duplicar, filtro e busca, leitura da URL, mapper, salvar e ativar, desativar e excluir (ativar recusa dado antigo inválido).
+- `features/advertisers/presentation/AdvertiserScreens.test.tsx` (jsdom): sugestões de tipo, formulário salvo e enviado, erros mantendo o que foi digitado, tabela e estados vazios.
 - `features/tips/presentation/TipScreens.test.tsx` (jsdom): formulário, tabela e estados vazios, ações (ativar, desativar com confirmação e aviso, exclusão bloqueada mostrando os usos, cancelar) e `ListFilters`.
 - Ligação com dicas: `lifecycle.test.ts` (dica apagada bloqueia a publicação, inativa avisa), `save-step.test.ts` (dica inexistente) e `StepForm.test.tsx` (seletor de dica, dica apagada continua visível).
 - `features/questionnaires/domain/steps.test.ts`: ordem do fluxo, ordem do próximo passo, idiomas completos considerando passos, opções e informações booleanas, e limpeza dos saltos ao excluir.

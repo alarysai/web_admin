@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { imageRefSchema } from "@/lib/content/image-ref";
 import { localizedTextSchema } from "@/lib/content/localized-text";
 
 /**
@@ -28,11 +29,6 @@ const optionalString = z
   .transform((value) => (value ? value : null));
 
 const stepReference = z.string().trim().min(1).nullable();
-
-export const imageRefSchema = z.object({
-  path: z.string().min(1),
-  url: z.url({ protocol: /^https?$/, error: "URL de imagem inválida." }),
-});
 
 export const orderSchema = z
   .number({ error: "Informe a ordem." })

@@ -1,3 +1,4 @@
+import type { ImageRef } from "./image-ref";
 import type { LocalizedText } from "./localized-text";
 
 /**
@@ -19,6 +20,14 @@ export function asLocalizedText(value: unknown): LocalizedText {
 
 export function asOptionalLocalizedText(value: unknown): LocalizedText | null {
   return value && typeof value === "object" ? asLocalizedText(value) : null;
+}
+
+/** An ImageRef only when both path and url are present. */
+export function asImage(value: unknown): ImageRef | null {
+  const raw = value as { path?: unknown; url?: unknown } | null;
+  const path = asString(raw?.path);
+  const url = asString(raw?.url);
+  return path && url ? { path, url } : null;
 }
 
 /** Firestore Timestamp (anything with toDate) → Date. */
