@@ -16,7 +16,7 @@ Painel web da alarysai. Hospedado na **Vercel** e conectado ao projeto **Firebas
 
 > Next.js 16 tem mudanças incompatíveis com versões anteriores. Antes de usar uma API, leia a documentação em `node_modules/next/dist/docs/` (ver `AGENTS.md`).
 
-> O `firebase-admin` depende do `jose` 6, que só é publicado como ES Module e é carregado com `require()`. Isso exige Node.js recente: em versões antigas, a rota do Admin SDK quebra na Vercel com `ERR_REQUIRE_ESM`. Por isso o `package.json` fixa `"engines": { "node": "24.x" }`, e a Vercel usa essa versão no build e nas funções.
+> **Pendência conhecida (Auth no servidor):** `firebase-admin/auth` → `jwks-rsa` → `jose` 6 (só ES Module). Na Vercel, mesmo com Node v24.21.0, carregar esse módulo falha com `ERR_REQUIRE_ESM` (o runtime do Turbopack carrega o pacote externo com `require()`). Por isso cada serviço do Admin SDK fica num módulo separado, e as rotas que não usam Auth não carregam o `jose`. Antes de usar `admin/auth` numa rota (por exemplo, para validar o token de login), esse carregamento precisa ser resolvido e testado na Vercel. O `package.json` fixa `"engines": { "node": "24.x" }`, igual ao ambiente local.
 
 ## Estrutura
 
@@ -46,7 +46,7 @@ firestore.indexes.json
 ### Dois jeitos de acessar o Firebase
 
 - **`lib/firebase/client.ts`**: roda no navegador e segue as *security rules*. Use em Client Components (por exemplo, login com Firebase Auth).
-- **`lib/firebase/admin/*`**: roda só no servidor (Route Handlers, Server Actions, Server Components), usa a service account e **ignora as security rules**. O import `server-only` faz o build falhar se algum desses arquivos for parar num Client Component. Cada serviço fica no seu próprio módulo para a rota carregar só o que usa. Importe `admin/auth` apenas onde precisar de Auth, porque ele puxa o `jose` (ver a nota sobre Node.js acima).
+- **`lib/firebase/admin/*`**: roda só no servidor (Route Handlers, Server Actions, Server Components), usa a service account e **ignora as security rules**. O import `server-only` faz o build falhar se algum desses arquivos for parar num Client Component. Cada serviço fica no seu próprio módulo para a rota carregar só o que usa. Importe `admin/auth` apenas onde precisar de Auth, porque ele puxa o `jose` (ver a pendência acima).
 
 ### Regras de segurança
 
@@ -66,7 +66,7 @@ Copie `.env.example` para `.env.local`. Os valores públicos (`NEXT_PUBLIC_FIREB
 firebase apps:sdkconfig WEB --project alarysai-b6e85
 ```
 
-Para as credenciais do Admin SDK (`FIREBASE_CLIENT_EMAIL` e `FIREBASE_PRIVATE_KEY`), vá em Console Firebase → Configurações do projeto → Contas de serviço → **Gerar nova chave privada**. Coloque a chave entre aspas, com `\n` no lugar das quebras de linha. **Nunca faça commit do JSON da service account** (o `.gitignore` já bloqueia `*-firebase-adminsdk-*.json` e `.env*`).
+Para as credenciais do Admin SDK (`FIREBASE_CLIENT_EMAIL` e `FIREBASE_PRIVATE_KEY`), vá em Console Firebase → Configurações do projeto → Contas de serviço → **Gerar nova chave privada**. Em `FIREBASE_PRIVATE_KEY` vai o valor do campo `private_key`, de `-----BEGIN PRIVATE KEY-----` até `-----END PRIVATE KEY-----`. O código aceita a chave com `\n` literais ou com quebras de linha reais, e também remove as aspas e a vírgula que costumam vir junto ao copiar do JSON (ver `normalizePrivateKey` em `config.ts`). Se mesmo assim não for uma chave PEM, o `/api/health` registra no log `FIREBASE_PRIVATE_KEY inválida`. **Nunca faça commit do JSON da service account** (o `.gitignore` já bloqueia `*-firebase-adminsdk-*.json` e `.env*`).
 
 | Variável | Onde é usada | Secreta? |
 | --- | --- | --- |
@@ -103,7 +103,7 @@ npm test           # Vitest
 
 ## Testes
 
-- `src/lib/firebase/config.test.ts`: validação da config do cliente (chaves ausentes ou em branco, espaços nas pontas) e das credenciais do Admin SDK (conversão de `\n` na chave privada, variáveis ausentes).
+- `src/lib/firebase/config.test.ts`: validação da config do cliente (chaves ausentes ou em branco, espaços nas pontas) e das credenciais do Admin SDK (conversão de `\n`, aspas e vírgula copiadas do JSON, quebras de linha do Windows, JSON inteiro colado, valor que não é PEM, variáveis ausentes).
 - Verificação manual: a página inicial mostra "Firebase conectado ao projeto alarysai-b6e85", e `/api/health` responde `ok` quando a service account está configurada.
 
 ## Apps futuros

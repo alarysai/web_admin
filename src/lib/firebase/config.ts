@@ -47,6 +47,35 @@ export type AdminCredentials = {
   privateKey: string;
 };
 
+const PEM_HEADER = "-----BEGIN PRIVATE KEY-----";
+
+/**
+ * Accepts the `private_key` value however it was pasted into an env var:
+ * with literal `\n`, wrapped in the quotes/trailing comma copied from the
+ * service account JSON, with Windows line endings, or as the whole JSON file.
+ */
+export function normalizePrivateKey(raw: string | undefined): string | undefined {
+  let key = raw?.trim();
+  if (!key) return undefined;
+
+  if (key.startsWith("{")) {
+    try {
+      key = String(JSON.parse(key).private_key ?? "");
+    } catch {
+      // Not valid JSON: fall through and let the PEM check below report it.
+    }
+  }
+
+  key = key
+    .replace(/,$/, "")
+    .replace(/^(["'])([\s\S]*)\1$/, "$2")
+    .replace(/\\n/g, "\n")
+    .replace(/\r\n/g, "\n")
+    .trim();
+
+  return key || undefined;
+}
+
 /**
  * Service account fields for the Admin SDK (server only). Vercel stores
  * multi-line values with literal `\n`, so they are converted back to newlines.
@@ -56,7 +85,7 @@ export function parseAdminCredentials(
 ): AdminCredentials {
   const projectId = env.FIREBASE_PROJECT_ID?.trim();
   const clientEmail = env.FIREBASE_CLIENT_EMAIL?.trim();
-  const privateKey = env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n").trim();
+  const privateKey = normalizePrivateKey(env.FIREBASE_PRIVATE_KEY);
 
   const missing = [
     !projectId && "FIREBASE_PROJECT_ID",
@@ -67,6 +96,13 @@ export function parseAdminCredentials(
   if (missing.length > 0) {
     throw new Error(
       `Firebase Admin sem credenciais. Faltando: ${missing.join(", ")}.`,
+    );
+  }
+
+  if (!privateKey!.startsWith(PEM_HEADER)) {
+    throw new Error(
+      `FIREBASE_PRIVATE_KEY inválida: deve começar com "${PEM_HEADER}". ` +
+        'Cole só o valor do campo "private_key" do JSON da service account.',
     );
   }
 
