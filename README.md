@@ -12,19 +12,34 @@ Painel web da alarysai. Hospedado na **Vercel** e conectado ao projeto **Firebas
 | Estilo | Tailwind CSS 4 |
 | Backend | Firebase: Authentication, Firestore, Storage |
 | Hospedagem | Vercel (Node.js 24, fixado em `engines.node`) |
-| Testes | Vitest |
+| Sessão | Cookie `httpOnly` assinado com `jose` (HS256) |
+| Testes | Vitest + Testing Library (jsdom) |
 
 > Next.js 16 tem mudanças incompatíveis com versões anteriores. Antes de usar uma API, leia a documentação em `node_modules/next/dist/docs/` (ver `AGENTS.md`).
 
-> **Pendência conhecida (Auth no servidor):** `firebase-admin/auth` → `jwks-rsa` → `jose` 6 (só ES Module). Na Vercel, mesmo com Node v24.21.0, carregar esse módulo falha com `ERR_REQUIRE_ESM` (o runtime do Turbopack carrega o pacote externo com `require()`). Por isso cada serviço do Admin SDK fica num módulo separado, e as rotas que não usam Auth não carregam o `jose`. Antes de usar `admin/auth` numa rota (por exemplo, para validar o token de login), esse carregamento precisa ser resolvido e testado na Vercel. O `package.json` fixa `"engines": { "node": "24.x" }`, igual ao ambiente local.
+> **`firebase-admin/auth` não carrega na Vercel.** A cadeia `firebase-admin/auth` → `jwks-rsa` → `jose` 6 (só ES Module) falha com `ERR_REQUIRE_ESM`, mesmo com Node v24.21.0, porque o runtime do Turbopack carrega o pacote externo com `require()`. Por isso:
+> - o login **não usa** `firebase-admin/auth`: o ID token é validado com o `jose` direto, que o Next empacota normalmente (ver [Acesso do administrador](#acesso-do-administrador));
+> - cada serviço do Admin SDK fica num módulo separado, e só `lib/firebase/admin/auth.ts` puxa o `jose` via `firebase-admin`. Não importe esse módulo em rotas até o problema ser resolvido e testado na Vercel.
+>
+> O `package.json` fixa `"engines": { "node": "24.x" }`, igual ao ambiente local.
 
 ## Estrutura
 
 ```
 src/
+  proxy.ts                # checagem rápida do cookie de sessão → redireciona para /login
   app/
-    page.tsx              # página inicial (mostra o status do Firebase)
+    login/page.tsx        # tela de login (pública)
+    (painel)/layout.tsx   # exige admin ativo (requireAdmin) + cabeçalho com "Sair"
+    (painel)/page.tsx     # início do painel
     api/health/route.ts   # GET /api/health: testa o Admin SDK → Firestore
+    api/session/route.ts  # POST cria a sessão do admin · DELETE faz logout
+  features/auth/
+    domain/               # regras: createAdminSession, safeRedirectPath, tipos
+    data/                 # session-token (cookie JWT), firebase-id-token (jose),
+                          # admins-repository (Firestore), admin-sign-in (navegador)
+    server/               # session-cookie (nome/opções), current-admin (getCurrentAdmin/requireAdmin)
+    presentation/         # LoginForm, LogoutButton, mensagens de erro
   components/
     FirebaseStatus.tsx    # status do SDK cliente
   lib/firebase/
@@ -47,6 +62,45 @@ firestore.indexes.json
 
 - **`lib/firebase/client.ts`**: roda no navegador e segue as *security rules*. Use em Client Components (por exemplo, login com Firebase Auth).
 - **`lib/firebase/admin/*`**: roda só no servidor (Route Handlers, Server Actions, Server Components), usa a service account e **ignora as security rules**. O import `server-only` faz o build falhar se algum desses arquivos for parar num Client Component. Cada serviço fica no seu próprio módulo para a rota carregar só o que usa. Importe `admin/auth` apenas onde precisar de Auth, porque ele puxa o `jose` (ver a pendência acima).
+
+## Acesso do administrador
+
+Só entra no painel quem (1) faz login no Firebase Auth com e-mail e senha **e** (2) tem um documento ativo em `admins/{uid}` no Firestore.
+
+### Fluxo
+
+1. `/login` → `LoginForm` chama `signInWithEmailAndPassword` e manda o ID token para `POST /api/session`.
+2. A rota valida o ID token com o `jose` contra as chaves públicas do Google. Ela confere a assinatura, o `iss` (`https://securetoken.google.com/<projectId>`), o `aud` (o projectId), a expiração e o `auth_time`. Depois aplica a regra `createAdminSession`: o usuário precisa ter `admins/{uid}` com `active: true`.
+3. Se passar, o servidor grava o cookie `admin_session`: um JWT HS256 assinado com `SESSION_SECRET`, `httpOnly`, `secure` em produção, `sameSite=lax`, válido por **8 horas**.
+4. Respostas: `200` ok · `400` corpo inválido · `401` token inválido · `403` não é admin (o navegador também faz `signOut` do Firebase).
+
+### Proteção das rotas (duas camadas)
+
+| Camada | Onde | O que confere |
+| --- | --- | --- |
+| Otimista | `src/proxy.ts` | Só a assinatura e a validade do cookie, sem acesso ao banco. Sem sessão → `307 /login?next=<página>`. Não passa por aqui: `/login`, `/api/*` (cada rota se protege), `/_next/*` e arquivos com extensão. |
+| Autoritativa | `(painel)/layout.tsx` → `requireAdmin()` | Cookie válido **e** `admins/{uid}` ainda ativo, relido a cada requisição. Desativar ou apagar o documento corta o acesso na navegação seguinte, sem esperar o cookie expirar. |
+
+Toda página nova do painel deve ficar dentro de `src/app/(painel)/`. Toda rota `/api` que mexer em dados do painel deve chamar `getCurrentAdmin()` e responder `401` se o retorno for `null`. O `?next=` passa por `safeRedirectPath`, que só aceita caminhos do próprio site e bloqueia open redirect.
+
+### Logout
+
+O botão **Sair** chama `DELETE /api/session`, que apaga o cookie, e depois `signOut` do Firebase Auth no navegador. Em seguida vai para `/login`. Se a chamada falhar, ele vai para `/login` mesmo assim.
+
+### Cadastrar um administrador
+
+A coleção `admins` é gerenciada pelo console. As regras do Firestore negam qualquer acesso pelo SDK cliente, e só o servidor lê.
+
+1. **Authentication → Sign-in method**: ative **E-mail/senha** (uma vez).
+2. **Authentication → Users → Adicionar usuário**: informe e-mail e senha e copie o **UID** gerado.
+3. **Firestore → Iniciar coleção** `admins` → **ID do documento = o UID** → campos:
+
+| Campo | Tipo | Valor |
+| --- | --- | --- |
+| `email` | string | e-mail do admin (exibido no cabeçalho) |
+| `active` | boolean | `true` |
+
+Para tirar o acesso, mude `active` para `false` ou apague o documento. Qualquer valor diferente de `active: true` (ausente, `"true"` como texto, `1`) **nega** o acesso.
 
 ### Regras de segurança
 
@@ -74,6 +128,7 @@ Para as credenciais do Admin SDK (`FIREBASE_CLIENT_EMAIL` e `FIREBASE_PRIVATE_KE
 | `FIREBASE_PROJECT_ID` | Admin SDK | não |
 | `FIREBASE_CLIENT_EMAIL` | Admin SDK | sim |
 | `FIREBASE_PRIVATE_KEY` | Admin SDK | **sim** |
+| `SESSION_SECRET` | assinatura do cookie de sessão (proxy e rotas) | **sim**. Mínimo de 32 caracteres; use um valor diferente em cada ambiente. Trocar o valor desloga todos os admins. Sem ele, todas as páginas do painel dão erro. |
 
 As variáveis `NEXT_PUBLIC_*` entram no bundle **em tempo de build**. Se mudar alguma na Vercel, faça um novo deploy.
 
@@ -103,8 +158,16 @@ npm test           # Vitest
 
 ## Testes
 
+- `features/auth/domain/create-admin-session.test.ts`: admin ativo, token em branco, token inválido, usuário sem `admins/{uid}`, admin inativo.
+- `features/auth/domain/safe-redirect.test.ts`: caminhos aceitos e bloqueio de open redirect (`//`, URL absoluta, `\`, `/login`).
+- `features/auth/data/session-token.test.ts`: ida e volta, outra chave, token adulterado, expirado, perto de expirar, `SESSION_SECRET` ausente ou curta.
+- `features/auth/data/firebase-id-token.test.ts`: token válido, outro projeto, issuer errado, expirado, `auth_time` no futuro, chave desconhecida (chaves RSA locais, sem rede).
+- `features/auth/data/admins-repository.test.ts`: mapeamento defensivo de `admins/{uid}`.
+- `features/auth/data/admin-sign-in.test.ts`: tradução dos erros do Firebase Auth.
+- `features/auth/presentation/LoginForm.test.tsx` e `LogoutButton.test.tsx` (jsdom): sucesso com redirect, cada mensagem de erro, botão desabilitado durante o envio, campos obrigatórios, logout mesmo com falha.
+- `src/proxy.test.ts`: sessão válida passa, sem sessão ou cookie forjado → `/login?next=`, e o **matcher** (quais caminhos são protegidos ou ignorados).
 - `src/lib/firebase/config.test.ts`: validação da config do cliente (chaves ausentes ou em branco, espaços nas pontas) e das credenciais do Admin SDK (conversão de `\n`, aspas e vírgula copiadas do JSON, quebras de linha do Windows, JSON inteiro colado, valor que não é PEM, variáveis ausentes).
-- Verificação manual: a página inicial mostra "Firebase conectado ao projeto alarysai-b6e85", e `/api/health` responde `ok` quando a service account está configurada.
+- Verificação manual: sem sessão, qualquer página do painel redireciona para `/login`. Com um admin cadastrado, o login leva ao painel, o cabeçalho mostra o e-mail e **Sair** volta para `/login`. No painel, a página inicial mostra "Firebase conectado ao projeto alarysai-b6e85", e `/api/health` responde `ok` quando a service account está configurada.
 
 ## Apps futuros
 
