@@ -55,8 +55,9 @@ describe("initial values", () => {
     expect(localizedValues("name", null)).toEqual({ "name.pt": "", "name.en": "", "name.es": "" });
   });
 
-  it("resolveValues prefers what the admin just submitted", () => {
-    expect(resolveValues({ order: "1", "name.pt": "A" }, { order: "x" })).toEqual({ order: "x", "name.pt": "A" });
+  it("resolveValues shows exactly what was submitted, or the saved values", () => {
+    // An unchecked checkbox is absent from the submission: it must not come back from the saved values.
+    expect(resolveValues({ order: "1", partOfPrompt: "on" }, { order: "x" })).toEqual({ order: "x" });
     expect(resolveValues({ order: "1" }, null)).toEqual({ order: "1" });
   });
 });

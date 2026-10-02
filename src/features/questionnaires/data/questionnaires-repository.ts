@@ -2,20 +2,21 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 
-import { completeLanguages } from "@/lib/content/localized-text";
 import { getAdminFirestore } from "@/lib/firebase/admin/firestore";
 
 import type { Questionnaire } from "../domain/questionnaire";
 import type { QuestionnaireInput } from "../domain/schemas";
+import { questionnaireLanguages, type StepRecord } from "../domain/steps";
 import { toQuestionnaire } from "./questionnaire-mapper";
+import { toStep } from "./step-mapper";
 
 export const QUESTIONNAIRES_COLLECTION = "questionnaires";
 
 const collection = () => getAdminFirestore().collection(QUESTIONNAIRES_COLLECTION);
 
-/** Languages fully translated in the questionnaire's own texts (steps join in with the step editor). */
-function languagesOf(input: QuestionnaireInput) {
-  return completeLanguages([input.title, input.description]);
+async function stepsOf(id: string): Promise<StepRecord[]> {
+  const snapshot = await collection().doc(id).collection("steps").get();
+  return snapshot.docs.map((doc) => toStep(doc.id, doc.data()));
 }
 
 export async function listQuestionnaires(): Promise<Questionnaire[]> {
@@ -33,7 +34,7 @@ export async function createQuestionnaire(input: QuestionnaireInput, adminUid: s
   const ref = await collection().add({
     ...input,
     image: null,
-    languages: languagesOf(input),
+    languages: questionnaireLanguages(input, []),
     status: "draft",
     publishedAt: null,
     createdAt: FieldValue.serverTimestamp(),
@@ -50,7 +51,7 @@ export async function updateQuestionnaire(id: string, input: QuestionnaireInput,
   if (!(await ref.get()).exists) return false;
   await ref.update({
     ...input,
-    languages: languagesOf(input),
+    languages: questionnaireLanguages(input, await stepsOf(id)),
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: adminUid,
   });

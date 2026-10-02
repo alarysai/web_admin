@@ -81,7 +81,7 @@ users/{uid}                                   perfil e saldo de créditos
 | `description` | `LocalizedText \| null` | não | Texto de apresentação. |
 | `categoryId` | `string` | sim | ID em `questionnaireCategories`. |
 | `image` | `ImageRef \| null` | não | Capa/ícone na grade. |
-| `languages` | `("pt" \| "en" \| "es")[]` | sim | Idiomas com tradução **completa** (título, passos e opções). Sempre contém `"pt"`. Calculado pelo painel ao salvar; por enquanto considera só o título e a descrição, e os passos entram com o editor de passos. |
+| `languages` | `("pt" \| "en" \| "es")[]` | sim | Idiomas com tradução **completa** (título, passos e opções). Sempre contém `"pt"`. Recalculado pelo painel a cada vez que o questionário ou um passo é salvo ou excluído (título, descrição, textos dos passos, opções e rótulos das informações booleanas). |
 | `order` | `number` | sim | Posição dentro da categoria. |
 | `status` | `"draft" \| "published"` | sim | Rascunhos não aparecem nos apps. |
 | `publishedAt` | `Timestamp \| null` | não | Última publicação. |
@@ -135,7 +135,7 @@ Para decidir o passo seguinte, o app usa o primeiro destes que existir:
 2. `nextStepId` do **passo**;
 3. o próximo passo por `order`; se não houver, o questionário termina.
 
-`nextStepId` aceita o ID de um passo do **mesmo questionário** ou o valor especial **`"__end__"`**, que encerra o questionário. O painel valida (task 3.2) que todo salto aponta para um passo existente e que o fluxo não tem ciclo infinito.
+`nextStepId` aceita o ID de um passo do **mesmo questionário** ou o valor especial **`"__end__"`**, que encerra o questionário. O painel valida (task 3.2) que todo salto aponta para um passo existente e que o fluxo não tem ciclo infinito. Ao **excluir** um passo, o painel zera (`null`) os saltos que apontavam para ele, então ninguém fica com salto para um passo que não existe.
 
 ### `tipCategories/{categoryId}`
 

@@ -34,7 +34,7 @@ src/
     (painel)/page.tsx     # início do painel
     (painel)/loading.tsx  # estado de carregamento das páginas do painel
     (painel)/error.tsx    # erro ao carregar (ex.: Firestore fora) com "Tentar de novo"
-    (painel)/questionarios/            # lista (?q=&categoria=), novo/, [id]/
+    (painel)/questionarios/            # lista (?q=&categoria=), novo/, [id]/, [id]/passos/novo, [id]/passos/[stepId]
     (painel)/categorias/               # lista, nova/, [id]/
     api/health/route.ts   # GET /api/health: testa o Admin SDK → Firestore
     api/session/route.ts  # POST cria a sessão do admin · DELETE faz logout
@@ -45,15 +45,15 @@ src/
     server/               # session-cookie (nome/opções), current-admin (getCurrentAdmin/requireAdmin)
     presentation/         # LoginForm, LogoutButton, mensagens de erro
   features/questionnaires/
-    domain/               # schemas Zod (questionário, passo, opção), filtro/busca da lista
-    data/                 # questionnaires-repository (Admin SDK) + mapper defensivo
-    server/               # saveQuestionnaire (regra testável) + actions.ts (Server Action)
-    presentation/         # QuestionnaireForm, QuestionnaireTable, QuestionnaireFilters
+    domain/               # schemas Zod (questionário, passo, opção), filtro/busca, regras dos passos (steps.ts)
+    data/                 # questionnaires- e steps-repository (Admin SDK) + mappers defensivos
+    server/               # saveQuestionnaire, saveStep/deleteStepById, step-form (FormData → passo) + Server Actions
+    presentation/         # QuestionnaireForm/Table/Filters, StepForm, StepOptionsEditor, StepList, DeleteStepButton
   features/questionnaire-categories/   # mesma divisão: domain, data, server, presentation
   components/
     FirebaseStatus.tsx    # status do SDK cliente
     layout/               # AdminNav (menu lateral), PageHeader
-    form/                 # TextField, SelectField, LocalizedTextFields (PT/EN/ES), FormMessage
+    form/                 # TextField, TextAreaField, SelectField, LocalizedTextFields (PT/EN/ES), FormMessage
     ui/                   # StatusBadge
   lib/content/            # LocalizedText (schema, idiomas completos, busca sem acento), leitura defensiva do Firestore
   lib/forms/              # FormState das Server Actions, leitura de FormData, valores iniciais
@@ -139,13 +139,30 @@ Nome em PT/EN/ES (o português é obrigatório), ordem e status (ativa/inativa).
 ### Questionários (`/questionarios`)
 
 - **Lista:** busca pelo título em qualquer idioma, sem diferenciar maiúsculas nem acentos (`?q=`), e filtro por categoria (`?categoria=`). Os filtros ficam na URL. Mostra categoria, idiomas completos, status, ordem e data da última alteração. Há uma mensagem própria para "nenhum cadastrado" e para "nenhum resultado".
-- **Criar e editar:** título (PT obrigatório; EN/ES opcionais), descrição opcional, categoria (precisa existir) e ordem. Todo questionário novo nasce como **rascunho**. O campo `languages` é calculado ao salvar com base no título e na descrição. Os passos passam a entrar nesse cálculo junto com o editor de passos.
+- **Criar e editar:** título (PT obrigatório; EN/ES opcionais), descrição opcional, categoria (precisa existir) e ordem. Todo questionário novo nasce como **rascunho**.
+- **Idiomas completos (`languages`):** recalculados a cada vez que o questionário ou um passo é salvo ou excluído. Um idioma só conta quando título, descrição, passos, opções e informações booleanas estão todos traduzidos nele.
+### Passos (`/questionarios/[id]` → seção "Passos")
+
+- **Lista** na ordem do fluxo: ordem, tipo, nº de opções, texto e marcadores ("Entra no prompt", "Informação booleana"), com Editar e Excluir.
+- **Criar e editar passo:**
+  - **Tipo:** Pergunta ou Vídeo. Trocar o tipo descarta o que não pertence a ele: vídeo não tem opções, pergunta não tem link.
+  - **Texto** em PT/EN/ES (obrigatório enquanto não há imagens).
+  - **Vídeo:** link externo `https://`.
+  - **Pergunta:** opções que dá para adicionar e remover (mínimo 1), cada uma com texto PT/EN/ES e instrução de prompt.
+  - **"Vira parte do prompt?"** e **instrução de prompt** do passo (não traduzida).
+  - **Informação booleana:** rótulo PT/EN/ES e resposta Sim/Não.
+  - Um passo novo entra com ordem = última + 1.
+- **Excluir:** pede confirmação. Saltos de outros passos que apontavam para o passo excluído voltam a `null` (seguir a ordem), no mesmo batch da exclusão.
+- **Nomes dos campos das opções:** usam o **ID da opção** (`options.<id>.text.pt`), não a posição. Assim, remover uma opção do meio depois de um erro não troca os valores das outras, e os erros do Zod são traduzidos de posição para ID.
+- **Campos preservados:** `nextStepId` (do passo e das opções) e `infoFlag.tipId` viajam como campos ocultos. Salvar o formulário mantém os saltos (editor na entrega 3) e a dica ligada (cadastro de Dicas, 3.4).
+- **Sem imagens por enquanto:** `image` é gravado como `null` até o Storage ser ativado.
+
 - Sem nenhuma categoria cadastrada, o botão "Novo questionário" some e a lista mostra um aviso com link para criar uma.
 
 ### Entregas da 3.2
 
 1. ✅ Layout base, schemas Zod, categorias, lista com busca e filtro, criar e editar questionário.
-2. Editor de passos e opções, com upload de imagens (exige o Storage ativo, plano Blaze).
+2. ✅ Editor de passos e opções, **sem imagens** (o upload entra quando o Storage for ativado, plano Blaze).
 3. Saltos com validação (ID existente, sem ciclo) e pré-visualização do fluxo.
 4. Publicar, despublicar, duplicar e excluir.
 
@@ -234,6 +251,10 @@ npm run test:rules # regras do Firestore/Storage no emulador (exige Java 21+)
 - `features/questionnaires/data/questionnaire-mapper.test.ts`: documento completo, status desconhecido vira rascunho, campos ausentes, idiomas desconhecidos.
 - `features/questionnaires/server/save-questionnaire.test.ts`: criar, editar, sem sessão de admin, erros de campo com os valores digitados de volta, categoria inexistente, questionário apagado no meio.
 - `features/questionnaire-categories/categories.test.ts`: schema, ordenação, mapper e a regra de salvar.
+- `features/questionnaires/domain/steps.test.ts`: ordem do fluxo, ordem do próximo passo, idiomas completos considerando passos, opções e informações booleanas, e limpeza dos saltos ao excluir.
+- `features/questionnaires/data/step-mapper.test.ts`: passo completo, documento malformado, opção sem ID, imagem incompleta.
+- `features/questionnaires/server/step-form.test.ts` e `save-step.test.ts`: leitura do formulário (opções na ordem da tela, saltos ocultos preservados, tipo vídeo descarta opções, checkbox desmarcado, informação booleana), erros traduzidos de posição para ID da opção, criar, editar, sem sessão, questionário ou passo apagado, excluir.
+- `StepForm.test.tsx`, `StepList.test.tsx`, `DeleteStepButton.test.tsx` (jsdom): troca de tipo, adicionar e remover opções (mínimo 1), informação booleana, envio na ordem com saltos ocultos, erro na opção certa mantendo o que foi digitado, checkbox desmarcado não volta marcado, lista e estado vazio, exclusão com confirmação e erro.
 - `QuestionnaireForm.test.tsx`, `QuestionnaireTable.test.tsx` e `components/layout/AdminNav.test.tsx` (jsdom): formulário novo e de edição, envio, erros de campo mantendo o que foi digitado, botão desabilitado ao salvar, linhas da tabela, estados vazios e menu marcando a seção atual.
 - `src/lib/firebase/config.test.ts`: validação da config do cliente (chaves ausentes ou em branco, espaços nas pontas) e das credenciais do Admin SDK (conversão de `\n`, aspas e vírgula copiadas do JSON, quebras de linha do Windows, JSON inteiro colado, valor que não é PEM, variáveis ausentes).
 - Verificação manual: sem sessão, qualquer página do painel redireciona para `/login`. Com um admin cadastrado, o login leva ao painel, o cabeçalho mostra o e-mail e **Sair** volta para `/login`. No painel, a página inicial mostra "Firebase conectado ao projeto alarysai-b6e85", e `/api/health` responde `ok` quando a service account está configurada.
