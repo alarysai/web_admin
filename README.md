@@ -11,10 +11,12 @@ Painel web da alarysai. Hospedado na **Vercel** e conectado ao projeto **Firebas
 | Framework | Next.js 16 (App Router, TypeScript, `src/`) |
 | Estilo | Tailwind CSS 4 |
 | Backend | Firebase: Authentication, Firestore, Storage |
-| Hospedagem | Vercel |
+| Hospedagem | Vercel (Node.js 24, fixado em `engines.node`) |
 | Testes | Vitest |
 
 > Next.js 16 tem mudanças incompatíveis com versões anteriores. Antes de usar uma API, leia a documentação em `node_modules/next/dist/docs/` (ver `AGENTS.md`).
+
+> O `firebase-admin` depende do `jose` 6, que só é publicado como ES Module e é carregado com `require()`. Isso exige Node.js recente: em versões antigas, a rota do Admin SDK quebra na Vercel com `ERR_REQUIRE_ESM`. Por isso o `package.json` fixa `"engines": { "node": "24.x" }`, e a Vercel usa essa versão no build e nas funções.
 
 ## Estrutura
 
