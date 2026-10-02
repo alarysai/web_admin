@@ -1,6 +1,8 @@
 # alarysai · web admin
 
-Painel web da alarysai. Hospedado na **Vercel** e conectado ao projeto **Firebase `alarysai`**, que também vai servir de backend para os apps mobile que virão depois.
+Painel web da alarysai. Hospedado na **Vercel** e conectado ao projeto **Firebase `alarysai-b6e85`** (conta `alarysbr@gmail.com`), que também vai servir de backend para os apps mobile que virão depois.
+
+- Produção: https://web-admin-theta-sage.vercel.app (projeto Vercel `alarys-ai/web-admin`). As URLs de cada deploy (`web-admin-<hash>-alarys-ai.vercel.app`) ficam atrás da Deployment Protection da Vercel.
 
 ## Stack
 
@@ -29,7 +31,7 @@ src/
     client.ts             # SDK do navegador: Auth, Firestore, Storage
     admin.ts              # Admin SDK, só no servidor (`server-only`)
 firebase.json             # aponta para as regras e os índices (deploy via Firebase CLI)
-.firebaserc               # projeto padrão: alarysai
+.firebaserc               # projeto padrão: alarysai-b6e85
 firestore.rules           # regras do Firestore (começam fechadas)
 storage.rules             # regras do Storage (começam fechadas)
 firestore.indexes.json
@@ -55,7 +57,7 @@ firebase deploy --only firestore:rules,storage
 Copie `.env.example` para `.env.local`. Os valores públicos (`NEXT_PUBLIC_FIREBASE_*`) saem de:
 
 ```bash
-firebase apps:sdkconfig WEB --project alarysai
+firebase apps:sdkconfig WEB --project alarysai-b6e85
 ```
 
 Para as credenciais do Admin SDK (`FIREBASE_CLIENT_EMAIL` e `FIREBASE_PRIVATE_KEY`), vá em Console Firebase → Configurações do projeto → Contas de serviço → **Gerar nova chave privada**. Coloque a chave entre aspas, com `\n` no lugar das quebras de linha. **Nunca faça commit do JSON da service account** (o `.gitignore` já bloqueia `*-firebase-adminsdk-*.json` e `.env*`).
@@ -71,8 +73,9 @@ As variáveis `NEXT_PUBLIC_*` entram no bundle **em tempo de build**. Se mudar a
 
 ### 2. Serviços no Console Firebase (uma vez)
 
-1. **Firestore**: Build → Firestore Database → Criar banco (modo produção, região `southamerica-east1`).
-2. **Authentication**: Build → Authentication → Começar → ativar os provedores desejados (por exemplo, e-mail/senha e Google). Depois do primeiro deploy, adicione o domínio da Vercel em *Authorized domains*.
+1. **Firestore**: ✅ criado em 2026-10-02 pelo console, banco `(default)`, edição Standard, região `southamerica-east1` (São Paulo).
+   > ⚠️ Se o banco não existir, `firebase deploy --only firestore` o cria **sozinho na região `nam5` (EUA)**, e a região não pode ser trocada depois. Em um projeto novo, crie o banco antes de fazer deploy de regras: `firebase firestore:databases:create "(default)" --location southamerica-east1 --project <id>`.
+2. **Authentication**: Build → Authentication → Começar → ativar os provedores desejados (por exemplo, e-mail/senha e Google). Depois do primeiro deploy, adicione o domínio de produção da Vercel (`web-admin-theta-sage.vercel.app`) em *Authorized domains*.
 3. **Storage**: Build → Storage → Começar. Exige o plano **Blaze** (pago conforme o uso).
 4. Publique as regras: `firebase deploy --only firestore:rules,storage`.
 
@@ -95,8 +98,8 @@ npm test           # Vitest
 ## Testes
 
 - `src/lib/firebase/config.test.ts`: validação da config do cliente (chaves ausentes ou em branco, espaços nas pontas) e das credenciais do Admin SDK (conversão de `\n` na chave privada, variáveis ausentes).
-- Verificação manual: a página inicial mostra "Firebase conectado ao projeto alarysai", e `/api/health` responde `ok` quando a service account está configurada.
+- Verificação manual: a página inicial mostra "Firebase conectado ao projeto alarysai-b6e85", e `/api/health` responde `ok` quando a service account está configurada.
 
 ## Apps futuros
 
-Os apps Android/iOS devem ser registrados **no mesmo projeto Firebase `alarysai`** (`firebase apps:create ANDROID|IOS --project alarysai`). Assim, todos compartilham Auth, Firestore e Storage. Quando o schema do Firestore surgir, documente as coleções aqui e mantenha as regras em `firestore.rules` como fonte única.
+Os apps Android/iOS devem ser registrados **no mesmo projeto Firebase `alarysai-b6e85`** (`firebase apps:create ANDROID|IOS --project alarysai-b6e85`). Assim, todos compartilham Auth, Firestore e Storage. Quando o schema do Firestore surgir, documente as coleções aqui e mantenha as regras em `firestore.rules` como fonte única.
