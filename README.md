@@ -81,6 +81,7 @@ firestore.rules           # regras do Firestore (ver docs/data-model.md)
 storage.rules             # regras do Storage (ver docs/data-model.md)
 firestore.indexes.json    # índices das consultas dos apps
 docs/data-model.md        # modelo de dados: coleções, campos, permissões, Storage
+docs/android-integration.md # guia para os apps lerem o conteúdo do Firestore
 rules-tests/              # testes das regras no emulador (npm run test:rules)
 ```
 
@@ -331,4 +332,4 @@ npm run test:rules # regras do Firestore/Storage no emulador (exige Java 21+)
 
 ## Apps futuros
 
-Os apps Android/iOS devem ser registrados **no mesmo projeto Firebase `alarysai-b6e85`** (`firebase apps:create ANDROID|IOS --project alarysai-b6e85`). Assim, todos compartilham Auth, Firestore e Storage. O schema que os apps consomem está em [docs/data-model.md](docs/data-model.md). Os apps devem sempre filtrar por `status` nas consultas de conteúdo, senão o Firestore recusa a consulta.
+Os apps Android/iOS devem ser registrados **no mesmo projeto Firebase `alarysai-b6e85`** (`firebase apps:create ANDROID|IOS --project alarysai-b6e85`). Assim, todos compartilham Auth, Firestore e Storage. O schema que os apps consomem está em [docs/data-model.md](docs/data-model.md). **Guia para o app Android:** [docs/android-integration.md](docs/android-integration.md), com consultas por tela, formato JSON dos documentos, fluxo do questionário em Kotlin, DTOs, dados do usuário e erros. Não há API REST: os apps leem direto do Firestore. Os apps devem sempre filtrar por `status` nas consultas de conteúdo, senão o Firestore recusa a consulta.
