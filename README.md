@@ -31,7 +31,11 @@ src/
     config.ts             # leitura e validação das variáveis de ambiente (funções puras)
     config.test.ts        # testes de config.ts
     client.ts             # SDK do navegador: Auth, Firestore, Storage
-    admin.ts              # Admin SDK, só no servidor (`server-only`)
+    admin/                # Admin SDK, só no servidor (`server-only`)
+      app.ts              #   app com a service account
+      firestore.ts        #   getAdminFirestore()
+      auth.ts             #   getAdminAuth() (carrega o `jose`, que é só ESM)
+      storage.ts          #   getAdminStorage()
 firebase.json             # aponta para as regras e os índices (deploy via Firebase CLI)
 .firebaserc               # projeto padrão: alarysai-b6e85
 firestore.rules           # regras do Firestore (começam fechadas)
@@ -42,7 +46,7 @@ firestore.indexes.json
 ### Dois jeitos de acessar o Firebase
 
 - **`lib/firebase/client.ts`**: roda no navegador e segue as *security rules*. Use em Client Components (por exemplo, login com Firebase Auth).
-- **`lib/firebase/admin.ts`**: roda só no servidor (Route Handlers, Server Actions, Server Components), usa a service account e **ignora as security rules**. O import `server-only` faz o build falhar se esse arquivo for parar num Client Component.
+- **`lib/firebase/admin/*`**: roda só no servidor (Route Handlers, Server Actions, Server Components), usa a service account e **ignora as security rules**. O import `server-only` faz o build falhar se algum desses arquivos for parar num Client Component. Cada serviço fica no seu próprio módulo para a rota carregar só o que usa. Importe `admin/auth` apenas onde precisar de Auth, porque ele puxa o `jose` (ver a nota sobre Node.js acima).
 
 ### Regras de segurança
 

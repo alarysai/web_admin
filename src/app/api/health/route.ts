@@ -1,4 +1,4 @@
-import { getAdminFirestore } from "@/lib/firebase/admin";
+import { getAdminFirestore } from "@/lib/firebase/admin/firestore";
 
 /**
  * GET /api/health — confirms the server (local or Vercel) reaches Firestore
@@ -9,7 +9,7 @@ export async function GET() {
     await getAdminFirestore().listCollections();
     return Response.json({ firebase: "ok" });
   } catch (error) {
-    console.error("[health] Firebase Admin check failed", error);
+    console.error(`[health] Firebase Admin check failed (Node ${process.version})`, error);
     return Response.json({ firebase: "error" }, { status: 503 });
   }
 }
