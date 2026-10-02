@@ -49,12 +49,19 @@ export default async function EditQuestionnairePage({ params, searchParams }: Pa
           <h2 id="steps-heading" className="text-lg font-semibold">
             Passos ({steps.length})
           </h2>
-          <Link
-            href={`/questionarios/${questionnaire.id}/passos/novo`}
-            className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white"
-          >
-            Novo passo
-          </Link>
+          <div className="flex items-center gap-3">
+            {steps.length > 0 && (
+              <Link href={`/questionarios/${questionnaire.id}/fluxo`} className="text-sm underline">
+                Pré-visualizar fluxo
+              </Link>
+            )}
+            <Link
+              href={`/questionarios/${questionnaire.id}/passos/novo`}
+              className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white"
+            >
+              Novo passo
+            </Link>
+          </div>
         </div>
         {query.passo === "criado" && (
           <p role="status" className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">

@@ -7,7 +7,7 @@ import { getCurrentAdmin } from "@/features/auth/server/current-admin";
 import { formSuccess, type FormState } from "@/lib/forms/form-state";
 
 import { findQuestionnaire } from "../data/questionnaires-repository";
-import { createStep, deleteStep, updateStep } from "../data/steps-repository";
+import { createStep, deleteStep, listSteps, updateStep } from "../data/steps-repository";
 import { deleteStepById, saveStep, type DeleteStepResult } from "./save-step";
 
 function revalidateQuestionnaire(questionnaireId: string) {
@@ -25,6 +25,7 @@ export async function saveStepAction(
   const result = await saveStep(questionnaireId, stepId, formData, {
     getCurrentAdmin,
     questionnaireExists: async (id) => (await findQuestionnaire(id)) !== null,
+    listSteps,
     create: createStep,
     update: updateStep,
   });
@@ -38,7 +39,7 @@ export async function saveStepAction(
 
 /** Bound with (questionnaireId, stepId) in DeleteStepButton. */
 export async function deleteStepAction(questionnaireId: string, stepId: string): Promise<DeleteStepResult> {
-  const result = await deleteStepById(questionnaireId, stepId, { getCurrentAdmin, remove: deleteStep });
+  const result = await deleteStepById(questionnaireId, stepId, { getCurrentAdmin, listSteps, remove: deleteStep });
   if (result.ok) revalidateQuestionnaire(questionnaireId);
   return result;
 }

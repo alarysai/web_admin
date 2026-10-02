@@ -2,14 +2,16 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { findQuestionnaire } from "@/features/questionnaires/data/questionnaires-repository";
-import { findStep } from "@/features/questionnaires/data/steps-repository";
+import { listSteps } from "@/features/questionnaires/data/steps-repository";
+import { jumpTargets } from "@/features/questionnaires/presentation/jump-choices";
 import { StepForm } from "@/features/questionnaires/presentation/StepForm";
 import { newOptionId } from "@/features/questionnaires/presentation/step-values";
 import { saveStepAction } from "@/features/questionnaires/server/step-actions";
 
 export default async function EditStepPage({ params }: PageProps<"/questionarios/[id]/passos/[stepId]">) {
   const { id, stepId } = await params;
-  const [questionnaire, step] = await Promise.all([findQuestionnaire(id), findStep(id, stepId)]);
+  const [questionnaire, steps] = await Promise.all([findQuestionnaire(id), listSteps(id)]);
+  const step = steps.find((candidate) => candidate.id === stepId);
   if (!questionnaire || !step) notFound();
 
   return (
@@ -20,6 +22,7 @@ export default async function EditStepPage({ params }: PageProps<"/questionarios
         step={step}
         defaultOrder={step.order}
         initialOptionId={newOptionId()}
+        jumpTargets={jumpTargets(steps, step.id)}
         action={saveStepAction.bind(null, questionnaire.id, step.id)}
       />
     </>

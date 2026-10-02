@@ -21,11 +21,6 @@ export async function listSteps(questionnaireId: string): Promise<StepRecord[]> 
   return sortSteps(snapshot.docs.map((doc) => toStep(doc.id, doc.data())));
 }
 
-export async function findStep(questionnaireId: string, stepId: string): Promise<StepRecord | null> {
-  const snapshot = await stepsRef(questionnaireId).doc(stepId).get();
-  return snapshot.exists ? toStep(snapshot.id, snapshot.data()) : null;
-}
-
 /**
  * Recomputes `questionnaires.languages` from the questionnaire and all its
  * steps. Called after every step write so the list shows the real coverage.

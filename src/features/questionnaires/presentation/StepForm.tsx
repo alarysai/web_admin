@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 
 import { FormMessage } from "@/components/form/FormMessage";
 import { LocalizedTextFields } from "@/components/form/LocalizedTextFields";
+import { SelectField } from "@/components/form/SelectField";
 import { TextAreaField } from "@/components/form/TextAreaField";
 import { TextField } from "@/components/form/TextField";
 import { initialFormState, type FormState } from "@/lib/forms/form-state";
@@ -12,6 +13,7 @@ import { resolveValues } from "@/lib/forms/initial-values";
 
 import { STEP_TYPES, type StepType } from "../domain/schemas";
 import type { StepRecord } from "../domain/steps";
+import { jumpChoices, type JumpTarget } from "./jump-choices";
 import { StepOptionsEditor } from "./StepOptionsEditor";
 import { newOptionId, STEP_TYPE_LABELS, stepSavedValues } from "./step-values";
 
@@ -23,11 +25,21 @@ type StepFormProps = {
   defaultOrder: number;
   /** Id of the first option of a new step, generated on the server to keep hydration stable. */
   initialOptionId: string;
+  /** Other steps of the questionnaire this step (or its options) can jump to. */
+  jumpTargets: JumpTarget[];
   action: StepFormAction;
   initialState?: FormState;
 };
 
-export function StepForm({ questionnaireId, step, defaultOrder, initialOptionId, action, initialState = initialFormState }: StepFormProps) {
+export function StepForm({
+  questionnaireId,
+  step,
+  defaultOrder,
+  initialOptionId,
+  jumpTargets,
+  action,
+  initialState = initialFormState,
+}: StepFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const values = resolveValues(stepSavedValues(step, defaultOrder), state.values);
   const errors = state.fieldErrors;
@@ -42,7 +54,6 @@ export function StepForm({ questionnaireId, step, defaultOrder, initialOptionId,
   return (
     <form action={formAction} className="flex max-w-3xl flex-col gap-6">
       <FormMessage state={state} />
-      <input type="hidden" name="nextStepId" defaultValue={values.nextStepId} />
       <input type="hidden" name="infoFlag.tipId" defaultValue={values["infoFlag.tipId"]} />
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -91,12 +102,31 @@ export function StepForm({ questionnaireId, step, defaultOrder, initialOptionId,
       ) : (
         <StepOptionsEditor
           optionIds={optionIds}
+          jumpTargets={jumpTargets}
           values={values}
           errors={errors}
           onAdd={() => setOptionIds((ids) => [...ids, newOptionId()])}
           onRemove={(id) => setOptionIds((ids) => ids.filter((optionId) => optionId !== id))}
         />
       )}
+
+      <section aria-labelledby="flow-heading" className="flex flex-col gap-3 rounded-md border border-zinc-200 p-4">
+        <h2 id="flow-heading" className="text-sm font-semibold">
+          Fluxo
+        </h2>
+        <SelectField
+          name="nextStepId"
+          label="Próximo passo"
+          options={jumpChoices(jumpTargets, "Seguir a ordem", values.nextStepId)}
+          defaultValue={values.nextStepId}
+          error={errors.nextStepId}
+        />
+        <p className="text-xs text-zinc-500">
+          {type === "question"
+            ? "Vale para as opções que não têm um destino próprio. O fluxo não pode ter ciclos: todo caminho precisa chegar ao fim."
+            : "O fluxo não pode ter ciclos: todo caminho precisa chegar ao fim."}
+        </p>
+      </section>
 
       <section aria-labelledby="prompt-heading" className="flex flex-col gap-3 rounded-md border border-zinc-200 p-4">
         <h2 id="prompt-heading" className="text-sm font-semibold">

@@ -32,7 +32,18 @@ const saved: StepRecord = {
 function renderForm(props: Partial<Parameters<typeof StepForm>[0]> = {}) {
   const action = vi.fn<StepFormAction>().mockResolvedValue(formSuccess("Passo salvo."));
   render(
-    <StepForm questionnaireId="q1" step={null} defaultOrder={4} initialOptionId="first" action={action} {...props} />,
+    <StepForm
+      questionnaireId="q1"
+      step={null}
+      defaultOrder={4}
+      initialOptionId="first"
+      jumpTargets={[
+        { id: "s5", label: "#5 · Último" },
+        { id: "s6", label: "#6 · Extra" },
+      ]}
+      action={action}
+      {...props}
+    />,
   );
   return action;
 }
@@ -74,12 +85,16 @@ describe("StepForm", () => {
     expect(screen.getByLabelText("Não")).toBeChecked();
   });
 
-  it("shows the saved step and submits options in order, keeping hidden jumps", async () => {
+  it("shows the saved step and submits options in order, with their jumps", async () => {
     const action = renderForm({ step: saved, defaultOrder: saved.order });
     expect(screen.getByDisplayValue("Qual tema?")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Ethics")).toBeInTheDocument();
     expect(screen.getByDisplayValue("fale de ética")).toBeInTheDocument();
     expect(screen.getByLabelText("Vira parte do prompt?")).toBeChecked();
+    expect(screen.getByLabelText("Próximo passo")).toHaveValue("__end__");
+    const [firstJump, secondJump] = screen.getAllByLabelText("Depois desta opção");
+    expect(firstJump).toHaveValue("s5");
+    expect(secondJump).toHaveValue("");
 
     await userEvent.setup().click(screen.getByRole("button", { name: "Salvar passo" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Passo salvo.");
@@ -117,5 +132,32 @@ describe("StepForm", () => {
     expect(within(second).queryByText("Obrigatório em português.")).not.toBeInTheDocument();
     // Unchecked on submit: must not come back checked from the saved step.
     expect(screen.getByLabelText("Vira parte do prompt?")).not.toBeChecked();
+  });
+});
+
+describe("StepForm jumps", () => {
+  it("offers follow-the-order, every other step and the end", () => {
+    renderForm();
+    const options = within(screen.getByLabelText("Próximo passo")).getAllByRole("option").map((option) => option.textContent);
+    expect(options).toEqual(["Seguir a ordem", "Ir para #5 · Último", "Ir para #6 · Extra", "Encerrar o questionário"]);
+  });
+
+  it("lets an option jump somewhere else", async () => {
+    const user = userEvent.setup();
+    const action = renderForm();
+    // Required fields first, or the browser blocks the submit.
+    const [questionPt, optionPt] = screen.getAllByLabelText("Português *");
+    await user.type(questionPt, "Qual tema?");
+    await user.type(optionPt, "Ética");
+    await user.selectOptions(screen.getByLabelText("Depois desta opção"), "s6");
+    await user.click(screen.getByRole("button", { name: "Criar passo" }));
+    await screen.findByRole("status");
+    expect(action.mock.calls[0][1].get("options.first.nextStepId")).toBe("s6");
+  });
+
+  it("keeps a saved jump to a deleted step visible instead of dropping it", () => {
+    renderForm({ step: { ...saved, nextStepId: "ghost" }, defaultOrder: 2 });
+    expect(screen.getByLabelText("Próximo passo")).toHaveValue("ghost");
+    expect(screen.getByRole("option", { name: "Passo inexistente (ghost)" })).toBeInTheDocument();
   });
 });

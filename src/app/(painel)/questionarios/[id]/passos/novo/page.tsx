@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { findQuestionnaire } from "@/features/questionnaires/data/questionnaires-repository";
 import { listSteps } from "@/features/questionnaires/data/steps-repository";
 import { nextStepOrder } from "@/features/questionnaires/domain/steps";
+import { jumpTargets } from "@/features/questionnaires/presentation/jump-choices";
 import { StepForm } from "@/features/questionnaires/presentation/StepForm";
 import { newOptionId } from "@/features/questionnaires/presentation/step-values";
 import { saveStepAction } from "@/features/questionnaires/server/step-actions";
@@ -21,6 +22,7 @@ export default async function NewStepPage({ params }: PageProps<"/questionarios/
         step={null}
         defaultOrder={nextStepOrder(steps)}
         initialOptionId={newOptionId()}
+        jumpTargets={jumpTargets(steps, null)}
         action={saveStepAction.bind(null, questionnaire.id, null)}
       />
     </>

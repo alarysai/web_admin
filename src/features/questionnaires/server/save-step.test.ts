@@ -1,9 +1,27 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { StepRecord } from "../domain/steps";
 import { SESSION_EXPIRED_MESSAGE } from "./save-questionnaire";
 import { deleteStepById, saveStep, type DeleteStepDeps, type SaveStepDeps } from "./save-step";
 
 const admin = { uid: "admin-1", email: null };
+
+function existingStep(id: string, overrides: Partial<StepRecord> = {}): StepRecord {
+  return {
+    id,
+    order: 1,
+    type: "video",
+    text: { pt: id, en: null, es: null },
+    image: null,
+    videoUrl: "https://youtu.be/x",
+    options: [],
+    nextStepId: null,
+    partOfPrompt: false,
+    promptInstruction: null,
+    infoFlag: null,
+    ...overrides,
+  };
+}
 
 function videoForm(overrides: Record<string, string> = {}) {
   const data = new FormData();
@@ -26,6 +44,7 @@ function deps(overrides: Partial<SaveStepDeps> = {}): SaveStepDeps {
   return {
     getCurrentAdmin: vi.fn().mockResolvedValue(admin),
     questionnaireExists: vi.fn().mockResolvedValue(true),
+    listSteps: vi.fn().mockResolvedValue([existingStep("s1")]),
     create: vi.fn().mockResolvedValue("new-step"),
     update: vi.fn().mockResolvedValue(true),
     ...overrides,
@@ -86,14 +105,88 @@ describe("saveStep", () => {
   });
 
   it("reports a step deleted meanwhile", async () => {
-    const d = deps({ update: vi.fn().mockResolvedValue(false) });
+    const d = deps();
     expect(await saveStep("q1", "gone", videoForm(), d)).toMatchObject({ ok: false, state: { message: "Este passo não existe mais." } });
+    expect(d.update).not.toHaveBeenCalled();
+  });
+
+  it("saves jumps to existing steps and to the end", async () => {
+    const d = deps({ listSteps: vi.fn().mockResolvedValue([existingStep("s1"), existingStep("s2", { order: 2 })]) });
+    expect((await saveStep("q1", "s1", videoForm({ nextStepId: "__end__" }), d)).ok).toBe(true);
+    expect((await saveStep("q1", "s1", videoForm({ nextStepId: "s2" }), d)).ok).toBe(true);
+  });
+
+  it("rejects a jump to a step that does not exist", async () => {
+    const d = deps();
+    const result = await saveStep("q1", "s1", videoForm({ nextStepId: "ghost" }), d);
+    expect(result).toMatchObject({ ok: false, state: { fieldErrors: { nextStepId: expect.stringMatching(/não encontrado/) } } });
+    expect(d.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects an option jump to a missing step, on that option's field", async () => {
+    const data = new FormData();
+    [
+      ["type", "question"],
+      ["order", "1"],
+      ["text.pt", "Qual?"],
+      ["options.a.id", "a"],
+      ["options.a.text.pt", "Sim"],
+      ["options.a.nextStepId", "ghost"],
+    ].forEach(([key, value]) => data.append(key, value));
+    const result = await saveStep("q1", null, data, deps());
+    expect(result).toMatchObject({ ok: false, state: { fieldErrors: { "options.a.nextStepId": expect.any(String) } } });
+  });
+
+  it("rejects a jump that creates a cycle, naming it with step orders", async () => {
+    // s1 (#1) goes to s2 (#2) by order; making s2 jump back to s1 closes a loop.
+    const d = deps({ listSteps: vi.fn().mockResolvedValue([existingStep("s1"), existingStep("s2", { order: 2 })]) });
+    const result = await saveStep("q1", "s2", videoForm({ order: "2", nextStepId: "s1" }), d);
+    expect(result).toMatchObject({ ok: false, state: { message: expect.stringContaining("#1 → #2 → #1") } });
+    expect(d.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a step jumping to itself", async () => {
+    const result = await saveStep("q1", "s1", videoForm({ nextStepId: "s1" }), deps());
+    expect(result).toMatchObject({ ok: false, state: { message: expect.stringContaining("ciclo") } });
+  });
+
+  it("rejects removing a jump when following the order would loop", async () => {
+    // s2 (#2) jumps back to s1 (#1); s1 ends the questionnaire, so it is valid.
+    // Changing s1 to "follow the order" sends it to s2, which comes back to s1.
+    const steps = [existingStep("s1", { order: 1, nextStepId: "__end__" }), existingStep("s2", { order: 2, nextStepId: "s1" })];
+    const d = deps({ listSteps: vi.fn().mockResolvedValue(steps) });
+    const result = await saveStep("q1", "s1", videoForm({ order: "1", nextStepId: "" }), d);
+    expect(result).toMatchObject({ ok: false, state: { message: expect.stringContaining("ciclo") } });
+  });
+
+  it("rejects a new order that creates a cycle", async () => {
+    // s1 (#1) jumps to s3; s3 (#3) follows the order to the end. Moving s3 to #0
+    // makes it follow the order into s1, which jumps back to s3.
+    const steps = [existingStep("s1", { order: 1, nextStepId: "s3" }), existingStep("s3", { order: 3 })];
+    const d = deps({ listSteps: vi.fn().mockResolvedValue(steps) });
+    const result = await saveStep("q1", "s3", videoForm({ order: "0" }), d);
+    expect(result).toMatchObject({ ok: false, state: { message: expect.stringContaining("ciclo") } });
+  });
+
+  it("does not block unrelated edits when the flow already had a cycle", async () => {
+    const steps = [
+      existingStep("s1", { order: 1, nextStepId: "s2" }),
+      existingStep("s2", { order: 2, nextStepId: "s1" }),
+      existingStep("s3", { order: 3 }),
+    ];
+    const d = deps({ listSteps: vi.fn().mockResolvedValue(steps) });
+    expect((await saveStep("q1", "s3", videoForm({ order: "3" }), d)).ok).toBe(true);
   });
 });
 
 describe("deleteStepById", () => {
   function deleteDeps(overrides: Partial<DeleteStepDeps> = {}): DeleteStepDeps {
-    return { getCurrentAdmin: vi.fn().mockResolvedValue(admin), remove: vi.fn().mockResolvedValue(true), ...overrides };
+    return {
+      getCurrentAdmin: vi.fn().mockResolvedValue(admin),
+      listSteps: vi.fn().mockResolvedValue([existingStep("s1")]),
+      remove: vi.fn().mockResolvedValue(true),
+      ...overrides,
+    };
   }
 
   it("deletes as the current admin", async () => {
@@ -105,6 +198,20 @@ describe("deleteStepById", () => {
   it("refuses without an admin session", async () => {
     const d = deleteDeps({ getCurrentAdmin: vi.fn().mockResolvedValue(null) });
     await expect(deleteStepById("q1", "s1", d)).resolves.toEqual({ ok: false, message: SESSION_EXPIRED_MESSAGE });
+    expect(d.remove).not.toHaveBeenCalled();
+  });
+
+  it("refuses a deletion that would create a cycle", async () => {
+    // #1 jumps to #2 (the one deleted); #3 jumps back to #1. After deleting #2,
+    // #1 follows the order to #3, and #3 goes back to #1.
+    const steps = [
+      existingStep("s1", { order: 1, nextStepId: "s2" }),
+      existingStep("s2", { order: 2, nextStepId: "__end__" }),
+      existingStep("s3", { order: 3, nextStepId: "s1" }),
+    ];
+    const d = deleteDeps({ listSteps: vi.fn().mockResolvedValue(steps) });
+    const result = await deleteStepById("q1", "s2", d);
+    expect(result).toMatchObject({ ok: false, message: expect.stringContaining("#1 → #3 → #1") });
     expect(d.remove).not.toHaveBeenCalled();
   });
 

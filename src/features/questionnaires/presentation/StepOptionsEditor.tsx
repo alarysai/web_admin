@@ -1,10 +1,14 @@
 "use client";
 
 import { LocalizedTextFields } from "@/components/form/LocalizedTextFields";
+import { SelectField } from "@/components/form/SelectField";
 import { TextAreaField } from "@/components/form/TextAreaField";
+
+import { jumpChoices, type JumpTarget } from "./jump-choices";
 
 type StepOptionsEditorProps = {
   optionIds: string[];
+  jumpTargets: JumpTarget[];
   values: Record<string, string>;
   errors: Record<string, string>;
   onAdd: () => void;
@@ -12,7 +16,7 @@ type StepOptionsEditorProps = {
 };
 
 /** Answer options of a question. Field names use the option id (see server/step-form.ts). */
-export function StepOptionsEditor({ optionIds, values, errors, onAdd, onRemove }: StepOptionsEditorProps) {
+export function StepOptionsEditor({ optionIds, jumpTargets, values, errors, onAdd, onRemove }: StepOptionsEditorProps) {
   return (
     <section aria-labelledby="options-heading" className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
@@ -46,7 +50,6 @@ export function StepOptionsEditor({ optionIds, values, errors, onAdd, onRemove }
               </button>
             </div>
             <input type="hidden" name={`${base}.id`} value={optionId} />
-            <input type="hidden" name={`${base}.nextStepId`} defaultValue={values[`${base}.nextStepId`] ?? ""} />
             <LocalizedTextFields name={`${base}.text`} label="Texto da opção" values={values} errors={errors} />
             <TextAreaField
               name={`${base}.promptInstruction`}
@@ -55,6 +58,13 @@ export function StepOptionsEditor({ optionIds, values, errors, onAdd, onRemove }
               error={errors[`${base}.promptInstruction`]}
               hint="Enviada à IA quando o usuário escolhe esta opção."
               rows={2}
+            />
+            <SelectField
+              name={`${base}.nextStepId`}
+              label="Depois desta opção"
+              options={jumpChoices(jumpTargets, "Usar o “Próximo passo” do passo", values[`${base}.nextStepId`] ?? "")}
+              defaultValue={values[`${base}.nextStepId`] ?? ""}
+              error={errors[`${base}.nextStepId`]}
             />
           </div>
         );

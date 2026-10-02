@@ -135,7 +135,7 @@ Para decidir o passo seguinte, o app usa o primeiro destes que existir:
 2. `nextStepId` do **passo**;
 3. o próximo passo por `order`; se não houver, o questionário termina.
 
-`nextStepId` aceita o ID de um passo do **mesmo questionário** ou o valor especial **`"__end__"`**, que encerra o questionário. O painel valida (task 3.2) que todo salto aponta para um passo existente e que o fluxo não tem ciclo infinito. Ao **excluir** um passo, o painel zera (`null`) os saltos que apontavam para ele, então ninguém fica com salto para um passo que não existe.
+`nextStepId` aceita o ID de um passo do **mesmo questionário** ou o valor especial **`"__end__"`**, que encerra o questionário. O fluxo **não pode ter ciclo**, nem mesmo um com saída: todo caminho chega ao fim em número finito de passos, e o app nunca vê o mesmo passo duas vezes numa execução. O painel valida isso, e que todo salto aponta para um passo existente, ao salvar e ao excluir passos (mudar a ordem também pode criar um ciclo). Ao **excluir** um passo, o painel zera (`null`) os saltos que apontavam para ele, então ninguém fica com salto para um passo que não existe.
 
 ### `tipCategories/{categoryId}`
 

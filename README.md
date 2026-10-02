@@ -34,7 +34,7 @@ src/
     (painel)/page.tsx     # início do painel
     (painel)/loading.tsx  # estado de carregamento das páginas do painel
     (painel)/error.tsx    # erro ao carregar (ex.: Firestore fora) com "Tentar de novo"
-    (painel)/questionarios/            # lista (?q=&categoria=), novo/, [id]/, [id]/passos/novo, [id]/passos/[stepId]
+    (painel)/questionarios/            # lista (?q=&categoria=), novo/, [id]/, [id]/passos/novo, [id]/passos/[stepId], [id]/fluxo
     (painel)/categorias/               # lista, nova/, [id]/
     api/health/route.ts   # GET /api/health: testa o Admin SDK → Firestore
     api/session/route.ts  # POST cria a sessão do admin · DELETE faz logout
@@ -45,10 +45,10 @@ src/
     server/               # session-cookie (nome/opções), current-admin (getCurrentAdmin/requireAdmin)
     presentation/         # LoginForm, LogoutButton, mensagens de erro
   features/questionnaires/
-    domain/               # schemas Zod (questionário, passo, opção), filtro/busca, regras dos passos (steps.ts)
+    domain/               # schemas Zod, filtro/busca, regras dos passos (steps.ts), fluxo e saltos (flow.ts), prévia do prompt
     data/                 # questionnaires- e steps-repository (Admin SDK) + mappers defensivos
     server/               # saveQuestionnaire, saveStep/deleteStepById, step-form (FormData → passo) + Server Actions
-    presentation/         # QuestionnaireForm/Table/Filters, StepForm, StepOptionsEditor, StepList, DeleteStepButton
+    presentation/         # QuestionnaireForm/Table/Filters, StepForm, StepOptionsEditor, StepList, DeleteStepButton, FlowMap, FlowSimulator
   features/questionnaire-categories/   # mesma divisão: domain, data, server, presentation
   components/
     FirebaseStatus.tsx    # status do SDK cliente
@@ -152,10 +152,25 @@ Nome em PT/EN/ES (o português é obrigatório), ordem e status (ativa/inativa).
   - **"Vira parte do prompt?"** e **instrução de prompt** do passo (não traduzida).
   - **Informação booleana:** rótulo PT/EN/ES e resposta Sim/Não.
   - Um passo novo entra com ordem = última + 1.
-- **Excluir:** pede confirmação. Saltos de outros passos que apontavam para o passo excluído voltam a `null` (seguir a ordem), no mesmo batch da exclusão.
+- **Excluir:** pede confirmação. Saltos de outros passos que apontavam para o passo excluído voltam a `null` (seguir a ordem), no mesmo batch da exclusão. A exclusão é **recusada** se isso criar um ciclo.
 - **Nomes dos campos das opções:** usam o **ID da opção** (`options.<id>.text.pt`), não a posição. Assim, remover uma opção do meio depois de um erro não troca os valores das outras, e os erros do Zod são traduzidos de posição para ID.
-- **Campos preservados:** `nextStepId` (do passo e das opções) e `infoFlag.tipId` viajam como campos ocultos. Salvar o formulário mantém os saltos (editor na entrega 3) e a dica ligada (cadastro de Dicas, 3.4).
+- **Saltos:** "Próximo passo" no passo e "Depois desta opção" em cada opção. As escolhas são seguir a ordem (ou o próximo do passo), ir para outro passo do questionário ou encerrar o questionário. Um salto salvo para um passo que não existe mais continua aparecendo como "Passo inexistente", em vez de sumir sem aviso.
+- **Campo preservado:** `infoFlag.tipId` viaja como campo oculto. Salvar o formulário mantém a dica ligada (cadastro de Dicas, 3.4).
 - **Sem imagens por enquanto:** `image` é gravado como `null` até o Storage ser ativado.
+
+### Validação do fluxo (`domain/flow.ts`)
+
+Regras do fluxo: [docs/data-model.md → Fluxo e saltos](docs/data-model.md#fluxo-e-saltos). O servidor confere, ao **salvar** um passo (o que inclui mudar a ordem) e ao **excluir** um passo:
+
+- **Destino existe:** todo salto aponta para um passo do mesmo questionário ou para `__end__`. O erro aparece no campo do salto.
+- **Sem ciclos:** nenhum caminho volta a um passo já visitado, nem mesmo um caminho que tenha saída. Assim, todo caminho chega ao fim em número finito de passos. A mensagem mostra o ciclo pela ordem dos passos (ex.: "#1 → #3 → #1").
+- **Mudar a ordem ou excluir também conta:** essas operações mudam quem é o "próximo na ordem" e podem criar um ciclo sem que nenhum salto tenha sido editado.
+- **Dados antigos:** só bloqueia o que a operação **cria**. Se o questionário já tinha um ciclo ou um salto quebrado em outro passo, a edição de outros passos continua permitida, e a pré-visualização mostra o problema.
+
+### Pré-visualização do fluxo (`/questionarios/[id]/fluxo`)
+
+- **Simular:** percorre o questionário como o app, em PT, EN ou ES (cai para o português quando falta tradução). Mostra o vídeo, as opções e a informação booleana, tem o botão Recomeçar e lista as **partes do prompt**: resposta e instruções dos passos marcados com "vira parte do prompt?". O texto final do prompt é montado pelo serviço de geração.
+- **Mapa:** para cada passo, para onde vai cada opção ("“Ética” → Fim"). Mostra ciclos e saltos quebrados como erro e passos que nenhum caminho alcança como aviso.
 
 - Sem nenhuma categoria cadastrada, o botão "Novo questionário" some e a lista mostra um aviso com link para criar uma.
 
@@ -163,7 +178,7 @@ Nome em PT/EN/ES (o português é obrigatório), ordem e status (ativa/inativa).
 
 1. ✅ Layout base, schemas Zod, categorias, lista com busca e filtro, criar e editar questionário.
 2. ✅ Editor de passos e opções, **sem imagens** (o upload entra quando o Storage for ativado, plano Blaze).
-3. Saltos com validação (ID existente, sem ciclo) e pré-visualização do fluxo.
+3. ✅ Saltos com validação (ID existente, sem ciclo) e pré-visualização do fluxo.
 4. Publicar, despublicar, duplicar e excluir.
 
 ### Modelo de dados e regras de segurança
@@ -255,6 +270,10 @@ npm run test:rules # regras do Firestore/Storage no emulador (exige Java 21+)
 - `features/questionnaires/data/step-mapper.test.ts`: passo completo, documento malformado, opção sem ID, imagem incompleta.
 - `features/questionnaires/server/step-form.test.ts` e `save-step.test.ts`: leitura do formulário (opções na ordem da tela, saltos ocultos preservados, tipo vídeo descarta opções, checkbox desmarcado, informação booleana), erros traduzidos de posição para ID da opção, criar, editar, sem sessão, questionário ou passo apagado, excluir.
 - `StepForm.test.tsx`, `StepList.test.tsx`, `DeleteStepButton.test.tsx` (jsdom): troca de tipo, adicionar e remover opções (mínimo 1), informação booleana, envio na ordem com saltos ocultos, erro na opção certa mantendo o que foi digitado, checkbox desmarcado não volta marcado, lista e estado vazio, exclusão com confirmação e erro.
+- `features/questionnaires/domain/flow.test.ts`: próximo passo (opção, depois passo, depois ordem, depois `__end__`), transições, destino inexistente, ciclo mesmo com saída, salto para si mesmo, ciclo criado só pela ordem, passos inalcançáveis, fluxo depois de excluir.
+- `domain/prompt-preview.test.ts` e `presentation/jump-choices.test.ts`: partes do prompt por idioma e opções dos seletores de salto.
+- `save-step.test.ts` (saltos): destino existente e `__end__`, destino inexistente no passo e na opção, ciclo por salto, por salto para si mesmo, por remover um salto e por mudar a ordem, ciclo antigo não bloqueia outras edições, exclusão recusada quando cria ciclo.
+- `StepForm.test.tsx` (saltos) e `FlowPreview.test.tsx` (jsdom): seletores com as escolhas certas, salto de opção enviado, salto quebrado continua visível; simulação seguindo saltos e ordem, idiomas, Recomeçar, salto para passo inexistente; mapa com transições, ciclo e passo inalcançável.
 - `QuestionnaireForm.test.tsx`, `QuestionnaireTable.test.tsx` e `components/layout/AdminNav.test.tsx` (jsdom): formulário novo e de edição, envio, erros de campo mantendo o que foi digitado, botão desabilitado ao salvar, linhas da tabela, estados vazios e menu marcando a seção atual.
 - `src/lib/firebase/config.test.ts`: validação da config do cliente (chaves ausentes ou em branco, espaços nas pontas) e das credenciais do Admin SDK (conversão de `\n`, aspas e vírgula copiadas do JSON, quebras de linha do Windows, JSON inteiro colado, valor que não é PEM, variáveis ausentes).
 - Verificação manual: sem sessão, qualquer página do painel redireciona para `/login`. Com um admin cadastrado, o login leva ao painel, o cabeçalho mostra o e-mail e **Sair** volta para `/login`. No painel, a página inicial mostra "Firebase conectado ao projeto alarysai-b6e85", e `/api/health` responde `ok` quando a service account está configurada.
