@@ -183,6 +183,7 @@ describe("deleteStepById", () => {
   function deleteDeps(overrides: Partial<DeleteStepDeps> = {}): DeleteStepDeps {
     return {
       getCurrentAdmin: vi.fn().mockResolvedValue(admin),
+      isPublished: vi.fn().mockResolvedValue(false),
       listSteps: vi.fn().mockResolvedValue([existingStep("s1")]),
       remove: vi.fn().mockResolvedValue(true),
       ...overrides,
@@ -213,6 +214,21 @@ describe("deleteStepById", () => {
     const result = await deleteStepById("q1", "s2", d);
     expect(result).toMatchObject({ ok: false, message: expect.stringContaining("#1 → #3 → #1") });
     expect(d.remove).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete the only step of a published questionnaire", async () => {
+    const d = deleteDeps({ isPublished: vi.fn().mockResolvedValue(true) });
+    const result = await deleteStepById("q1", "s1", d);
+    expect(result).toMatchObject({ ok: false, message: expect.stringContaining("Despublique") });
+    expect(d.remove).not.toHaveBeenCalled();
+  });
+
+  it("deletes a step of a published questionnaire that has others", async () => {
+    const d = deleteDeps({
+      isPublished: vi.fn().mockResolvedValue(true),
+      listSteps: vi.fn().mockResolvedValue([existingStep("s1"), existingStep("s2", { order: 2 })]),
+    });
+    await expect(deleteStepById("q1", "s1", d)).resolves.toEqual({ ok: true });
   });
 
   it("tells when the step was already gone", async () => {

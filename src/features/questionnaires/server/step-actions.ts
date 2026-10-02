@@ -39,7 +39,12 @@ export async function saveStepAction(
 
 /** Bound with (questionnaireId, stepId) in DeleteStepButton. */
 export async function deleteStepAction(questionnaireId: string, stepId: string): Promise<DeleteStepResult> {
-  const result = await deleteStepById(questionnaireId, stepId, { getCurrentAdmin, listSteps, remove: deleteStep });
+  const result = await deleteStepById(questionnaireId, stepId, {
+    getCurrentAdmin,
+    isPublished: async (id) => (await findQuestionnaire(id))?.status === "published",
+    listSteps,
+    remove: deleteStep,
+  });
   if (result.ok) revalidateQuestionnaire(questionnaireId);
   return result;
 }

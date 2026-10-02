@@ -45,10 +45,10 @@ src/
     server/               # session-cookie (nome/opções), current-admin (getCurrentAdmin/requireAdmin)
     presentation/         # LoginForm, LogoutButton, mensagens de erro
   features/questionnaires/
-    domain/               # schemas Zod, filtro/busca, regras dos passos (steps.ts), fluxo e saltos (flow.ts), prévia do prompt
-    data/                 # questionnaires- e steps-repository (Admin SDK) + mappers defensivos
-    server/               # saveQuestionnaire, saveStep/deleteStepById, step-form (FormData → passo) + Server Actions
-    presentation/         # QuestionnaireForm/Table/Filters, StepForm, StepOptionsEditor, StepList, DeleteStepButton, FlowMap, FlowSimulator
+    domain/               # schemas Zod, filtro/busca, passos (steps.ts), fluxo (flow.ts), publicação/cópia (lifecycle.ts), prévia do prompt
+    data/                 # questionnaires-, steps- e questionnaire-lifecycle-repository (Admin SDK) + mappers defensivos
+    server/               # saveQuestionnaire, saveStep/deleteStepById, step-form, questionnaire-lifecycle + Server Actions
+    presentation/         # QuestionnaireForm/Table/Filters, QuestionnaireActions, StepForm, StepOptionsEditor, StepList, DeleteStepButton, FlowMap, FlowSimulator
   features/questionnaire-categories/   # mesma divisão: domain, data, server, presentation
   components/
     FirebaseStatus.tsx    # status do SDK cliente
@@ -152,7 +152,7 @@ Nome em PT/EN/ES (o português é obrigatório), ordem e status (ativa/inativa).
   - **"Vira parte do prompt?"** e **instrução de prompt** do passo (não traduzida).
   - **Informação booleana:** rótulo PT/EN/ES e resposta Sim/Não.
   - Um passo novo entra com ordem = última + 1.
-- **Excluir:** pede confirmação. Saltos de outros passos que apontavam para o passo excluído voltam a `null` (seguir a ordem), no mesmo batch da exclusão. A exclusão é **recusada** se isso criar um ciclo.
+- **Excluir:** pede confirmação. Saltos de outros passos que apontavam para o passo excluído voltam a `null` (seguir a ordem), no mesmo batch da exclusão. A exclusão é **recusada** se isso criar um ciclo ou se for o único passo de um questionário publicado.
 - **Nomes dos campos das opções:** usam o **ID da opção** (`options.<id>.text.pt`), não a posição. Assim, remover uma opção do meio depois de um erro não troca os valores das outras, e os erros do Zod são traduzidos de posição para ID.
 - **Saltos:** "Próximo passo" no passo e "Depois desta opção" em cada opção. As escolhas são seguir a ordem (ou o próximo do passo), ir para outro passo do questionário ou encerrar o questionário. Um salto salvo para um passo que não existe mais continua aparecendo como "Passo inexistente", em vez de sumir sem aviso.
 - **Campo preservado:** `infoFlag.tipId` viaja como campo oculto. Salvar o formulário mantém a dica ligada (cadastro de Dicas, 3.4).
@@ -167,6 +167,17 @@ Regras do fluxo: [docs/data-model.md → Fluxo e saltos](docs/data-model.md#flux
 - **Mudar a ordem ou excluir também conta:** essas operações mudam quem é o "próximo na ordem" e podem criar um ciclo sem que nenhum salto tenha sido editado.
 - **Dados antigos:** só bloqueia o que a operação **cria**. Se o questionário já tinha um ciclo ou um salto quebrado em outro passo, a edição de outros passos continua permitida, e a pré-visualização mostra o problema.
 
+### Publicar, despublicar, duplicar e excluir (seção "Publicação" na tela do questionário)
+
+| Ação | Regra |
+| --- | --- |
+| **Publicar** | Exige: ao menos 1 passo; todo passo válido pelo schema (pega dado antigo ou malformado); fluxo válido (sem ciclo e sem salto quebrado); categoria existente. Se algo falhar, mostra a lista do que corrigir e não publica. Categoria **inativa** é só aviso: publica, mas o app não mostra o questionário até a categoria ser ativada. Grava `status: "published"`, `publishedAt` e recalcula `languages`. |
+| **Despublicar** | Pede confirmação. Volta para `draft` e sai dos apps na hora. `publishedAt` guarda a última publicação. |
+| **Duplicar** | Cria uma cópia em **rascunho**, com o título "(cópia)" / "(copy)" / "(copia)", e abre a cópia. Os passos ganham IDs novos e os saltos são remapeados para os passos da cópia. Um salto que apontava para um passo inexistente vira `null`. |
+| **Excluir** | Só para **rascunho**: despublique antes. Pede confirmação e apaga o questionário **e os passos**, porque o Firestore não apaga subcoleções sozinho. Os passos são apagados primeiro; se algo falhar no meio, o questionário continua lá para tentar de novo. |
+
+Enquanto está publicado, o questionário continua editável. Cada salvamento de passo passa pela validação de schema e de fluxo, então ele não fica inválido no app. Duplicar e excluir gravam em batches de até 450 operações (o limite do Firestore é 500).
+
 ### Pré-visualização do fluxo (`/questionarios/[id]/fluxo`)
 
 - **Simular:** percorre o questionário como o app, em PT, EN ou ES (cai para o português quando falta tradução). Mostra o vídeo, as opções e a informação booleana, tem o botão Recomeçar e lista as **partes do prompt**: resposta e instruções dos passos marcados com "vira parte do prompt?". O texto final do prompt é montado pelo serviço de geração.
@@ -179,7 +190,7 @@ Regras do fluxo: [docs/data-model.md → Fluxo e saltos](docs/data-model.md#flux
 1. ✅ Layout base, schemas Zod, categorias, lista com busca e filtro, criar e editar questionário.
 2. ✅ Editor de passos e opções, **sem imagens** (o upload entra quando o Storage for ativado, plano Blaze).
 3. ✅ Saltos com validação (ID existente, sem ciclo) e pré-visualização do fluxo.
-4. Publicar, despublicar, duplicar e excluir.
+4. ✅ Publicar, despublicar, duplicar e excluir.
 
 ### Modelo de dados e regras de segurança
 
@@ -274,6 +285,9 @@ npm run test:rules # regras do Firestore/Storage no emulador (exige Java 21+)
 - `domain/prompt-preview.test.ts` e `presentation/jump-choices.test.ts`: partes do prompt por idioma e opções dos seletores de salto.
 - `save-step.test.ts` (saltos): destino existente e `__end__`, destino inexistente no passo e na opção, ciclo por salto, por salto para si mesmo, por remover um salto e por mudar a ordem, ciclo antigo não bloqueia outras edições, exclusão recusada quando cria ciclo.
 - `StepForm.test.tsx` (saltos) e `FlowPreview.test.tsx` (jsdom): seletores com as escolhas certas, salto de opção enviado, salto quebrado continua visível; simulação seguindo saltos e ordem, idiomas, Recomeçar, salto para passo inexistente; mapa com transições, ciclo e passo inalcançável.
+- `features/questionnaires/domain/lifecycle.test.ts`: o que bloqueia a publicação (sem passos, categoria inexistente, passo inválido, ciclo, salto quebrado), aviso de categoria inativa, título da cópia, cópia com IDs novos e saltos remapeados.
+- `server/questionnaire-lifecycle.test.ts`: publicar, despublicar, duplicar e excluir, sem sessão e com questionário apagado; não excluir publicado; e (em `save-step.test.ts`) não excluir o único passo de um publicado.
+- `QuestionnaireActions.test.tsx` (jsdom): publicar com aviso, lista de problemas, confirmação ao despublicar, excluir desabilitado quando publicado, excluir com confirmação, duplicar sem perguntar.
 - `QuestionnaireForm.test.tsx`, `QuestionnaireTable.test.tsx` e `components/layout/AdminNav.test.tsx` (jsdom): formulário novo e de edição, envio, erros de campo mantendo o que foi digitado, botão desabilitado ao salvar, linhas da tabela, estados vazios e menu marcando a seção atual.
 - `src/lib/firebase/config.test.ts`: validação da config do cliente (chaves ausentes ou em branco, espaços nas pontas) e das credenciais do Admin SDK (conversão de `\n`, aspas e vírgula copiadas do JSON, quebras de linha do Windows, JSON inteiro colado, valor que não é PEM, variáveis ausentes).
 - Verificação manual: sem sessão, qualquer página do painel redireciona para `/login`. Com um admin cadastrado, o login leva ao painel, o cabeçalho mostra o e-mail e **Sair** volta para `/login`. No painel, a página inicial mostra "Firebase conectado ao projeto alarysai-b6e85", e `/api/health` responde `ok` quando a service account está configurada.

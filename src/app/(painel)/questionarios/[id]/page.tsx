@@ -8,9 +8,16 @@ import { sortCategories } from "@/features/questionnaire-categories/domain/categ
 import { findQuestionnaire } from "@/features/questionnaires/data/questionnaires-repository";
 import { listSteps } from "@/features/questionnaires/data/steps-repository";
 import { QUESTIONNAIRE_STATUS_LABELS } from "@/features/questionnaires/domain/schemas";
+import { QuestionnaireActions } from "@/features/questionnaires/presentation/QuestionnaireActions";
 import { QuestionnaireForm } from "@/features/questionnaires/presentation/QuestionnaireForm";
 import { StepList } from "@/features/questionnaires/presentation/StepList";
-import { saveQuestionnaireAction } from "@/features/questionnaires/server/actions";
+import {
+  deleteQuestionnaireAction,
+  duplicateQuestionnaireAction,
+  publishQuestionnaireAction,
+  saveQuestionnaireAction,
+  unpublishQuestionnaireAction,
+} from "@/features/questionnaires/server/actions";
 import { deleteStepAction } from "@/features/questionnaires/server/step-actions";
 import { formSuccess } from "@/lib/forms/form-state";
 
@@ -24,7 +31,7 @@ export default async function EditQuestionnairePage({ params, searchParams }: Pa
   ]);
   if (!questionnaire) notFound();
 
-  const justCreated = query.criado === "1";
+  const flash = query.criado === "1" ? "Questionário criado como rascunho." : query.copiado === "1" ? "Cópia criada como rascunho." : null;
 
   return (
     <>
@@ -37,11 +44,19 @@ export default async function EditQuestionnairePage({ params, searchParams }: Pa
         />
         <span>· Idiomas completos: {questionnaire.languages.join(", ").toUpperCase()}</span>
       </div>
+      <QuestionnaireActions
+        status={questionnaire.status}
+        title={questionnaire.title.pt}
+        publish={publishQuestionnaireAction.bind(null, questionnaire.id)}
+        unpublish={unpublishQuestionnaireAction.bind(null, questionnaire.id)}
+        duplicate={duplicateQuestionnaireAction.bind(null, questionnaire.id)}
+        remove={deleteQuestionnaireAction.bind(null, questionnaire.id)}
+      />
       <QuestionnaireForm
         questionnaire={questionnaire}
         categories={sortCategories(categories).map((category) => ({ value: category.id, label: category.name.pt }))}
         action={saveQuestionnaireAction.bind(null, questionnaire.id)}
-        initialState={justCreated ? formSuccess("Questionário criado como rascunho.") : undefined}
+        initialState={flash ? formSuccess(flash) : undefined}
       />
 
       <section aria-labelledby="steps-heading" className="flex max-w-3xl flex-col gap-3">

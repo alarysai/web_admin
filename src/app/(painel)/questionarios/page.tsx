@@ -9,7 +9,8 @@ import { QuestionnaireFilters } from "@/features/questionnaires/presentation/Que
 import { QuestionnaireTable } from "@/features/questionnaires/presentation/QuestionnaireTable";
 
 export default async function QuestionnairesPage({ searchParams }: PageProps<"/questionarios">) {
-  const filters = readQuestionnaireFilters(await searchParams);
+  const params = await searchParams;
+  const filters = readQuestionnaireFilters(params);
   const [questionnaires, categories] = await Promise.all([listQuestionnaires(), listCategories()]);
 
   const categoryOptions = sortCategories(categories).map((category) => ({ value: category.id, label: category.name.pt }));
@@ -24,6 +25,12 @@ export default async function QuestionnairesPage({ searchParams }: PageProps<"/q
         description={`${questionnaires.length} cadastrado(s)`}
         action={categories.length > 0 ? { href: "/questionarios/novo", label: "Novo questionário" } : undefined}
       />
+
+      {params.excluido === "1" && (
+        <p role="status" className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
+          Questionário excluído.
+        </p>
+      )}
 
       {categories.length === 0 && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">

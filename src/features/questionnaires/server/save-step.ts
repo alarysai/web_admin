@@ -92,6 +92,7 @@ export async function saveStep(
 
 export type DeleteStepDeps = {
   getCurrentAdmin: () => Promise<AdminSession | null>;
+  isPublished: (questionnaireId: string) => Promise<boolean>;
   listSteps: (questionnaireId: string) => Promise<StepRecord[]>;
   remove: (questionnaireId: string, stepId: string, adminUid: string) => Promise<boolean>;
 };
@@ -100,13 +101,18 @@ export type DeleteStepResult = { ok: true } | { ok: false; message: string };
 
 /**
  * Deleting changes the flow too: jumps to the step fall back to "follow the
- * order", and the order neighbours change. Refused if that creates a cycle.
+ * order", and the order neighbours change. Refused if that creates a cycle, or
+ * if it would leave a published questionnaire without steps.
  */
 export async function deleteStepById(questionnaireId: string, stepId: string, deps: DeleteStepDeps): Promise<DeleteStepResult> {
   const admin = await deps.getCurrentAdmin();
   if (!admin) return { ok: false, message: SESSION_EXPIRED_MESSAGE };
 
-  const steps = await deps.listSteps(questionnaireId);
+  const [steps, published] = await Promise.all([deps.listSteps(questionnaireId), deps.isPublished(questionnaireId)]);
+  if (published && steps.length === 1 && steps[0].id === stepId) {
+    return { ok: false, message: "Este é o único passo de um questionário publicado. Despublique antes de excluir." };
+  }
+
   const after = stepsAfterDelete(stepId, steps);
   const cycle = findCycle(sortSteps(after));
   if (cycle && !findCycle(sortSteps(steps))) {
