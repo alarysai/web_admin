@@ -155,7 +155,7 @@ Categorias de questionário e de dicas têm o mesmo formato: nome em PT/EN/ES (o
 
 ### Passos (`/questionarios/[id]` → seção "Passos")
 
-- **Lista** na ordem do fluxo: ordem, tipo, nº de opções, texto e marcadores ("Entra no prompt", "Informação booleana"), com Editar e Excluir.
+- **Lista** na ordem do fluxo: ordem, tipo, **tipo de resposta** com o nº de opções ou, na resposta aberta, o limite de caracteres ("Múltipla escolha · 3 opções", "Resposta aberta · até 280 caracteres"), texto e marcadores ("Opcional", "Entra no prompt", "Informação booleana"), com Editar e Excluir.
 - **Criar e editar passo:**
   - **Tipo:** Pergunta ou Vídeo. Trocar o tipo descarta o que não pertence a ele: vídeo não tem opções, pergunta não tem link.
   - **Texto** em PT/EN/ES (obrigatório enquanto não há imagens).

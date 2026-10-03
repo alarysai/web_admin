@@ -53,10 +53,21 @@ describe("StepList", () => {
     expect(within(video).getByText("Assista à introdução")).toBeInTheDocument();
     expect(within(video).queryByText(/opção/)).not.toBeInTheDocument();
 
-    expect(within(question).getByText("2 opção(ões)")).toBeInTheDocument();
+    expect(within(question).getByText("Escolha única · 2 opções")).toBeInTheDocument();
+    expect(within(question).queryByText("Opcional")).not.toBeInTheDocument();
     expect(within(question).getByText("Entra no prompt")).toBeInTheDocument();
     expect(within(question).getByText("Informação booleana")).toBeInTheDocument();
     expect(within(question).getByRole("link", { name: "Editar" })).toHaveAttribute("href", "/questionarios/q1/passos/s2");
+  });
+
+  it("shows the answer type, the open answer limit and the optional marker", () => {
+    const open: StepRecord = { ...steps[1], id: "s3", order: 3, answerType: "open_text", options: [], maxLength: 280, required: false };
+    const multiple: StepRecord = { ...steps[1], id: "s4", order: 4, answerType: "multiple_choice", options: steps[1].options.slice(0, 1) };
+    render(<StepList questionnaireId="q1" steps={[open, multiple]} deleteAction={() => vi.fn()} />);
+    const [openItem, multipleItem] = screen.getAllByRole("listitem");
+    expect(within(openItem).getByText("Resposta aberta · até 280 caracteres")).toBeInTheDocument();
+    expect(within(openItem).getByText("Opcional")).toBeInTheDocument();
+    expect(within(multipleItem).getByText("Múltipla escolha · 1 opção")).toBeInTheDocument();
   });
 
   it("invites to create the first step", () => {

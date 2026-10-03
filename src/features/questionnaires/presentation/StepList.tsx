@@ -2,8 +2,9 @@ import Link from "next/link";
 
 import { StatusBadge } from "@/components/ui/StatusBadge";
 
-import type { DeleteStepResult } from "../server/save-step";
+import { ANSWER_TYPE_LABELS, answerTypeHasOptions } from "../domain/schemas";
 import type { StepRecord } from "../domain/steps";
+import type { DeleteStepResult } from "../server/save-step";
 import { DeleteStepButton } from "./DeleteStepButton";
 import { STEP_TYPE_LABELS } from "./step-values";
 
@@ -13,6 +14,14 @@ type StepListProps = {
   /** Server Action bound per step by the page. */
   deleteAction: (stepId: string) => () => Promise<DeleteStepResult>;
 };
+
+/** "Múltipla escolha · 3 opções", "Resposta aberta · até 280 caracteres". */
+function answerSummary(step: StepRecord): string {
+  const detail = answerTypeHasOptions(step.answerType)
+    ? `${step.options.length} ${step.options.length === 1 ? "opção" : "opções"}`
+    : `até ${step.maxLength} caracteres`;
+  return `${ANSWER_TYPE_LABELS[step.answerType]} · ${detail}`;
+}
 
 function summary(step: StepRecord): string {
   const text = step.text?.pt ?? "";
@@ -40,7 +49,8 @@ export function StepList({ questionnaireId, steps, deleteAction }: StepListProps
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
               <span>#{step.order}</span>
               <StatusBadge label={STEP_TYPE_LABELS[step.type]} tone="neutral" />
-              {step.type === "question" && <span>{step.options.length} opção(ões)</span>}
+              {step.type === "question" && <span>{answerSummary(step)}</span>}
+              {step.type === "question" && !step.required && <StatusBadge label="Opcional" tone="neutral" />}
               {step.partOfPrompt && <StatusBadge label="Entra no prompt" tone="positive" />}
               {step.infoFlag && <StatusBadge label="Informação booleana" tone="neutral" />}
             </div>
