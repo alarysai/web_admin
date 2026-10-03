@@ -2,7 +2,7 @@ import type { LocalizedText } from "@/lib/content/localized-text";
 
 import { describeCycle, validateFlow } from "./flow";
 import { END_OF_QUESTIONNAIRE, stepSchema } from "./schemas";
-import { sortSteps, type StepRecord } from "./steps";
+import { sortSteps, stepTipIds, type StepRecord } from "./steps";
 
 export type CategoryState = { exists: boolean; active: boolean };
 
@@ -42,11 +42,10 @@ export function checkPublishable(steps: StepRecord[], category: CategoryState, t
 
   const inactiveTipSteps: number[] = [];
   for (const step of ordered) {
-    const tipId = step.infoFlag?.tipId;
-    if (!tipId) continue;
-    const tip = tips.get(tipId);
-    if (!tip) problems.push(`O passo #${step.order} está ligado a uma dica que não existe mais.`);
-    else if (!tip.active) inactiveTipSteps.push(step.order);
+    // Info flag and option tips alike.
+    const linked = stepTipIds(step).map((tipId) => tips.get(tipId));
+    if (linked.some((tip) => !tip)) problems.push(`O passo #${step.order} está ligado a uma dica que não existe mais.`);
+    else if (linked.some((tip) => !tip!.active)) inactiveTipSteps.push(step.order);
   }
 
   if (problems.length > 0) return { ok: false, problems };

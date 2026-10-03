@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { StepRecord } from "../domain/steps";
 import { jumpChoices, jumpTargets } from "./jump-choices";
+import { DEFAULT_ANSWER_FIELDS } from "../domain/schemas";
 
 const step = (id: string, order: number, pt: string | null): StepRecord => ({
   id,
@@ -15,6 +16,7 @@ const step = (id: string, order: number, pt: string | null): StepRecord => ({
   partOfPrompt: false,
   promptInstruction: null,
   infoFlag: null,
+  ...DEFAULT_ANSWER_FIELDS,
 });
 
 describe("jumpTargets", () => {

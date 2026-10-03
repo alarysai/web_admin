@@ -149,7 +149,7 @@ Categorias de questionário e de dicas têm o mesmo formato: nome em PT/EN/ES (o
 ### Questionários (`/questionarios`)
 
 - **Lista:** busca pelo título em qualquer idioma, sem diferenciar maiúsculas nem acentos (`?q=`), e filtro por categoria (`?categoria=`). Os filtros ficam na URL. Mostra categoria, idiomas completos, status, ordem e data da última alteração. Há uma mensagem própria para "nenhum cadastrado" e para "nenhum resultado".
-- **Criar e editar:** título (PT obrigatório; EN/ES opcionais), descrição opcional, categoria (precisa existir) e ordem. Todo questionário novo nasce como **rascunho**.
+- **Criar e editar:** título (PT obrigatório; EN/ES opcionais), descrição opcional, categoria (precisa existir), ordem e **custo em créditos** (opcional, só informativo: o app mostra "Custo: N créditos"). Todo questionário novo nasce como **rascunho**.
 - **Idiomas completos (`languages`):** recalculados a cada vez que o questionário ou um passo é salvo ou excluído. Um idioma só conta quando título, descrição, passos, opções e informações booleanas estão todos traduzidos nele.
 - Sem nenhuma categoria cadastrada, o botão "Novo questionário" some e a lista mostra um aviso com link para criar uma.
 
@@ -160,7 +160,9 @@ Categorias de questionário e de dicas têm o mesmo formato: nome em PT/EN/ES (o
   - **Tipo:** Pergunta ou Vídeo. Trocar o tipo descarta o que não pertence a ele: vídeo não tem opções, pergunta não tem link.
   - **Texto** em PT/EN/ES (obrigatório enquanto não há imagens).
   - **Vídeo:** link externo `https://`.
-  - **Pergunta:** opções que dá para adicionar e remover (mínimo 1), cada uma com texto PT/EN/ES e instrução de prompt.
+  - **Pergunta:** **tipo de resposta** (v2): escolha única, múltipla escolha, resposta aberta ou sim/não. Também tem **texto de ajuda** (PT/EN/ES, opcional) e **"Opcional"**, que faz o app mostrar "Pular".
+    - **Resposta aberta:** sem opções; **limite de caracteres** (1 a 5000, padrão 500) e **texto de exemplo** (PT/EN/ES).
+    - **Demais tipos:** opções que dá para adicionar e remover, cada uma com texto PT/EN/ES, instrução de prompt e **dica da opção** (mostrada enquanto ela está selecionada). **Sim ou não** exige exatamente 2 opções. Na **múltipla escolha** o salto por opção some do formulário, porque o salto é sempre o do passo.
   - **"Vira parte do prompt?"** e **instrução de prompt** do passo (não traduzida).
   - **Informação booleana:** rótulo PT/EN/ES, resposta Sim/Não e a **dica relacionada** (opcional; dicas inativas aparecem com "(inativa)"). O servidor confere se a dica existe. Uma dica ligada que foi apagada continua visível como "Dica inexistente".
   - Um passo novo entra com ordem = última + 1.
@@ -174,6 +176,7 @@ Categorias de questionário e de dicas têm o mesmo formato: nome em PT/EN/ES (o
 Regras do fluxo: [docs/data-model.md → Fluxo e saltos](docs/data-model.md#fluxo-e-saltos). O servidor confere, ao **salvar** um passo (o que inclui mudar a ordem) e ao **excluir** um passo:
 
 - **Destino existe:** todo salto aponta para um passo do mesmo questionário ou para `__end__`. O erro aparece no campo do salto.
+- **Salto por tipo de resposta (v2):** o salto da opção só vale em escolha única e sim/não. Na múltipla escolha e na resposta aberta vale o do passo, e "Pular" também segue o do passo. O mapa e o simulador seguem a mesma regra do app.
 - **Sem ciclos:** nenhum caminho volta a um passo já visitado, nem mesmo um caminho que tenha saída. Assim, todo caminho chega ao fim em número finito de passos. A mensagem mostra o ciclo pela ordem dos passos (ex.: "#1 → #3 → #1").
 - **Mudar a ordem ou excluir também conta:** essas operações mudam quem é o "próximo na ordem" e podem criar um ciclo sem que nenhum salto tenha sido editado.
 - **Dados antigos:** só bloqueia o que a operação **cria**. Se o questionário já tinha um ciclo ou um salto quebrado em outro passo, a edição de outros passos continua permitida, e a pré-visualização mostra o problema.
@@ -191,7 +194,8 @@ Enquanto está publicado, o questionário continua editável. Cada salvamento de
 
 ### Pré-visualização do fluxo (`/questionarios/[id]/fluxo`)
 
-- **Simular:** percorre o questionário como o app, em PT, EN ou ES (cai para o português quando falta tradução). Mostra o vídeo, as opções e a informação booleana, tem o botão Recomeçar e lista as **partes do prompt**: resposta e instruções dos passos marcados com "vira parte do prompt?". O texto final do prompt é montado pelo serviço de geração.
+- **Simular:** percorre o questionário como o app, em PT, EN ou ES (cai para o português quando falta tradução). Rádio na escolha única, caixas na múltipla, campo com contador na resposta aberta, "Pular" nas opcionais e a **dica** (da opção selecionada ou da informação booleana; só dicas ativas). Tem o botão Recomeçar e lista as **partes do prompt** pela tabela da proposta v2 (`domain/prompt-preview.ts`). O texto final do prompt é montado pelo serviço de geração.
+- **Mapa:** mostra "Continuar" e "Pular" além das opções, e o tipo de resposta de cada pergunta.
 - **Mapa:** para cada passo, para onde vai cada opção ("“Ética” → Fim"). Mostra ciclos e saltos quebrados como erro e passos que nenhum caminho alcança como aviso.
 
 ### Dicas (`/dicas`)
@@ -201,7 +205,7 @@ Enquanto está publicado, o questionário continua editável. Cada salvamento de
 - **Ativar:** exige que a categoria exista. Se ela estiver inativa, ativa com aviso.
 - **Desativar:** pede confirmação. Avisa quais questionários **publicados** ligam a ela e vão deixar de mostrá-la.
 - **Excluir:** pede confirmação e é **recusado enquanto algum passo liga à dica**. A mensagem lista os questionários onde ela é usada, e a tela da dica também mostra onde ela é usada.
-- **Onde é usada:** consulta em grupo de coleções (`collectionGroup("steps")` com `infoFlag.tipId`), que exige o índice em `firestore.indexes.json` → `fieldOverrides`.
+- **Onde é usada:** consulta em grupo de coleções sobre `steps`: `tipIds array-contains` (campo calculado pelo painel com as dicas da informação booleana **e das opções**) mais `infoFlag.tipId`, para passos gravados antes do `tipIds`. Os dois índices estão em `firestore.indexes.json` → `fieldOverrides`. Um passo gravado antes da v2 só ganha `tipIds` quando é salvo de novo, mas nesse caso ele também não tinha dica por opção.
 - **Sem imagem por enquanto:** `image: null` até o Storage ser ativado.
 
 ### Anunciantes (`/anunciantes`)
@@ -319,6 +323,8 @@ npm run test:rules # regras do Firestore/Storage no emulador (exige Java 21+)
 - `features/questionnaires/data/step-mapper.test.ts`: passo completo, documento malformado, opção sem ID, imagem incompleta.
 - `features/questionnaires/server/step-form.test.ts` e `save-step.test.ts`: leitura do formulário (opções na ordem da tela, saltos ocultos preservados, tipo vídeo descarta opções, checkbox desmarcado, informação booleana), erros traduzidos de posição para ID da opção, criar, editar, sem sessão, questionário ou passo apagado, excluir.
 - `StepForm.test.tsx`, `StepList.test.tsx`, `DeleteStepButton.test.tsx` (jsdom): troca de tipo, adicionar e remover opções (mínimo 1), informação booleana, envio na ordem com saltos ocultos, erro na opção certa mantendo o que foi digitado, checkbox desmarcado não volta marcado, lista e estado vazio, exclusão com confirmação e erro.
+- `features/questionnaires/domain/answer-types.test.ts` (v2): regras por tipo de resposta (aberta sem opções, sim/não com 2, múltipla sem salto por opção, só pergunta é opcional, `maxLength`), `creditCost`, saltos por tipo e "Pular" (inclusive ciclo só por "Pular"), dicas das opções (`stepTipIds`, publicação) e idiomas com ajuda e exemplo.
+- `features/questionnaires/data/steps-repository.test.ts`: `tipIds` gravado com todas as dicas do passo.
 - `features/questionnaires/domain/flow.test.ts`: próximo passo (opção, depois passo, depois ordem, depois `__end__`), transições, destino inexistente, ciclo mesmo com saída, salto para si mesmo, ciclo criado só pela ordem, passos inalcançáveis, fluxo depois de excluir.
 - `domain/prompt-preview.test.ts` e `presentation/jump-choices.test.ts`: partes do prompt por idioma e opções dos seletores de salto.
 - `save-step.test.ts` (saltos): destino existente e `__end__`, destino inexistente no passo e na opção, ciclo por salto, por salto para si mesmo, por remover um salto e por mudar a ordem, ciclo antigo não bloqueia outras edições, exclusão recusada quando cria ciclo.

@@ -22,6 +22,41 @@ export type StepType = (typeof STEP_TYPES)[number];
 /** `nextStepId` value that ends the questionnaire. */
 export const END_OF_QUESTIONNAIRE = "__end__";
 
+/** How a question is answered (proposta-questionario-v2). Only meaningful for `type == "question"`. */
+export const ANSWER_TYPES = ["single_choice", "multiple_choice", "open_text", "yes_no"] as const;
+export type AnswerType = (typeof ANSWER_TYPES)[number];
+
+export const ANSWER_TYPE_LABELS: Record<AnswerType, string> = {
+  single_choice: "Escolha única",
+  multiple_choice: "Múltipla escolha",
+  open_text: "Resposta aberta",
+  yes_no: "Sim ou não",
+};
+
+/** Defaults the apps assume when a field is missing (documents saved before v2). */
+export const DEFAULT_ANSWER_TYPE: AnswerType = "single_choice";
+export const DEFAULT_MAX_LENGTH = 500;
+export const MAX_LENGTH_LIMIT = 5000;
+
+/** v2 step fields as the apps read them when absent: single choice, required, 500 characters. */
+export const DEFAULT_ANSWER_FIELDS = {
+  answerType: DEFAULT_ANSWER_TYPE,
+  helpText: null,
+  required: true,
+  maxLength: DEFAULT_MAX_LENGTH,
+  placeholder: null,
+} as const;
+
+/** Answer types whose options carry their own jump. Multiple choice cannot: no single option decides. */
+export function optionJumpsApply(answerType: AnswerType): boolean {
+  return answerType === "single_choice" || answerType === "yes_no";
+}
+
+/** Open answers have no options. */
+export function answerTypeHasOptions(answerType: AnswerType): boolean {
+  return answerType !== "open_text";
+}
+
 const optionalString = z
   .string()
   .trim()
@@ -29,6 +64,8 @@ const optionalString = z
   .transform((value) => (value ? value : null));
 
 const stepReference = z.string().trim().min(1).nullable();
+
+const tipReference = z.string().trim().min(1).nullable();
 
 export const orderSchema = z
   .number({ error: "Informe a ordem." })
@@ -43,6 +80,8 @@ export const questionnaireInputSchema = z.object({
   description: localizedTextSchema.nullable(),
   categoryId: z.string().trim().min(1, "Escolha uma categoria."),
   order: orderSchema,
+  /** Informative cost shown in the app review screen; the real debit happens on the server. null = not shown. */
+  creditCost: z.number({ error: "Informe um número." }).int("Use um número inteiro.").min(0, "Use 0 ou mais.").nullable(),
 });
 
 export type QuestionnaireInput = z.infer<typeof questionnaireInputSchema>;
@@ -56,6 +95,8 @@ export const stepOptionSchema = z
     image: imageRefSchema.nullable(),
     promptInstruction: optionalString,
     nextStepId: stepReference,
+    /** Tip shown while this option is selected; wins over the step's info flag tip. */
+    tipId: tipReference,
   })
   .refine((option) => option.text !== null || option.image !== null, {
     message: "Informe um texto ou uma imagem para a opção.",
@@ -69,7 +110,7 @@ export type StepOption = z.infer<typeof stepOptionSchema>;
 export const infoFlagSchema = z.object({
   label: localizedTextSchema,
   value: z.boolean(),
-  tipId: z.string().trim().min(1).nullable(),
+  tipId: tipReference,
 });
 
 export type InfoFlag = z.infer<typeof infoFlagSchema>;
@@ -86,6 +127,15 @@ export const stepSchema = z
     partOfPrompt: z.boolean(),
     promptInstruction: optionalString,
     infoFlag: infoFlagSchema.nullable(),
+    answerType: z.enum(ANSWER_TYPES, { error: "Escolha o tipo de resposta." }),
+    helpText: localizedTextSchema.nullable(),
+    required: z.boolean(),
+    maxLength: z
+      .number({ error: "Informe o limite de caracteres." })
+      .int("Use um número inteiro.")
+      .min(1, "Use de 1 a 5000.")
+      .max(MAX_LENGTH_LIMIT, "Use de 1 a 5000."),
+    placeholder: localizedTextSchema.nullable(),
   })
   .superRefine((step, context) => {
     if (step.text === null && step.image === null) {
@@ -99,15 +149,16 @@ export const stepSchema = z
       if (step.options.length > 0) {
         context.addIssue({ code: "custom", path: ["options"], message: "Passos de vídeo não têm opções." });
       }
+      if (!step.required) {
+        context.addIssue({ code: "custom", path: ["required"], message: "Só perguntas podem ser opcionais." });
+      }
     }
 
     if (step.type === "question") {
       if (step.videoUrl !== null) {
         context.addIssue({ code: "custom", path: ["videoUrl"], message: "Perguntas não têm link de vídeo." });
       }
-      if (step.options.length === 0) {
-        context.addIssue({ code: "custom", path: ["options"], message: "Adicione ao menos uma opção." });
-      }
+      addAnswerTypeIssues(step, context);
     }
 
     const seen = new Set<string>();
@@ -120,3 +171,26 @@ export const stepSchema = z
   });
 
 export type Step = z.infer<typeof stepSchema>;
+
+type AnswerFields = Pick<z.infer<typeof stepSchema>, "answerType" | "options">;
+
+/** Rules per answer type (proposta-questionario-v2, section 3). */
+function addAnswerTypeIssues(step: AnswerFields, context: z.RefinementCtx) {
+  const issue = (path: PropertyKey[], message: string) => context.addIssue({ code: "custom", path, message });
+
+  if (step.answerType === "open_text") {
+    if (step.options.length > 0) issue(["options"], "Resposta aberta não tem opções.");
+    return;
+  }
+  if (step.options.length === 0) issue(["options"], "Adicione ao menos uma opção.");
+  if (step.answerType === "yes_no" && step.options.length !== 2) {
+    issue(["options"], "Sim ou não precisa de exatamente 2 opções (ex.: Sim e Não).");
+  }
+  if (!optionJumpsApply(step.answerType)) {
+    step.options.forEach((option, index) => {
+      if (option.nextStepId !== null) {
+        issue(["options", index, "nextStepId"], "Na múltipla escolha o salto é do passo, não da opção.");
+      }
+    });
+  }
+}

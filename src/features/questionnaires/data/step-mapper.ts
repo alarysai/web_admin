@@ -1,6 +1,13 @@
 import { asEnum, asImage, asNumber, asOptionalLocalizedText, asString } from "@/lib/content/firestore-mapping";
 
-import { STEP_TYPES, type InfoFlag, type StepOption } from "../domain/schemas";
+import {
+  ANSWER_TYPES,
+  DEFAULT_ANSWER_FIELDS,
+  MAX_LENGTH_LIMIT,
+  STEP_TYPES,
+  type InfoFlag,
+  type StepOption,
+} from "../domain/schemas";
 import type { StepRecord } from "../domain/steps";
 
 function asOption(value: unknown, index: number): StepOption {
@@ -11,7 +18,15 @@ function asOption(value: unknown, index: number): StepOption {
     image: asImage(raw.image),
     promptInstruction: asString(raw.promptInstruction),
     nextStepId: asString(raw.nextStepId),
+    tipId: asString(raw.tipId),
   };
+}
+
+/** Same limits as the schema; anything else falls back to the default the apps use. */
+function asMaxLength(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= MAX_LENGTH_LIMIT
+    ? value
+    : DEFAULT_ANSWER_FIELDS.maxLength;
 }
 
 function asInfoFlag(value: unknown): InfoFlag | null {
@@ -39,5 +54,11 @@ export function toStep(id: string, data: Record<string, unknown> | undefined): S
     partOfPrompt: raw.partOfPrompt === true,
     promptInstruction: asString(raw.promptInstruction),
     infoFlag: asInfoFlag(raw.infoFlag),
+    // v2 fields: documents saved before them read as the defaults the apps assume.
+    answerType: asEnum(raw.answerType, ANSWER_TYPES, DEFAULT_ANSWER_FIELDS.answerType),
+    helpText: asOptionalLocalizedText(raw.helpText),
+    required: raw.required !== false,
+    maxLength: asMaxLength(raw.maxLength),
+    placeholder: asOptionalLocalizedText(raw.placeholder),
   };
 }

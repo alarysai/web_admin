@@ -83,6 +83,7 @@ users/{uid}                                   perfil e saldo de créditos
 | `image` | `ImageRef \| null` | não | Capa/ícone na grade. |
 | `languages` | `("pt" \| "en" \| "es")[]` | sim | Idiomas com tradução **completa** (título, passos e opções). Sempre contém `"pt"`. Recalculado pelo painel a cada vez que o questionário ou um passo é salvo ou excluído (título, descrição, textos dos passos, opções e rótulos das informações booleanas). |
 | `order` | `number` | sim | Posição dentro da categoria. |
+| `creditCost` | `number \| null` | não | **v2.** Custo em créditos, só informativo ("Custo: 4 créditos" na revisão do app). Inteiro ≥ 0; `null`/ausente = não mostrar. O débito real é feito pelo servidor. |
 | `status` | `"draft" \| "published"` | sim | Rascunhos não aparecem nos apps. |
 | `publishedAt` | `Timestamp \| null` | não | Última publicação. |
 | auditoria | | sim | |
@@ -103,9 +104,26 @@ O ID do documento é o **ID do passo**, usado pelos saltos. Ele é estável: reo
 | `partOfPrompt` | `boolean` | sim | "Vira parte do prompt?" — se a resposta deste passo entra no prompt final. |
 | `promptInstruction` | `string \| null` | não | Instrução para a IA associada ao passo (não traduzida: vai para o LLM). |
 | `infoFlag` | `InfoFlag \| null` | não | Informação booleana do passo (ex.: "Isso é ético?"). |
+| `answerType` | `"single_choice" \| "multiple_choice" \| "open_text" \| "yes_no"` | não | **v2.** Como a pergunta é respondida. Ausente = `"single_choice"`. Em vídeos é sempre `"single_choice"` (sem efeito). |
+| `helpText` | `LocalizedText \| null` | não | **v2.** Linha de ajuda abaixo do enunciado. Só em perguntas. |
+| `required` | `boolean` | não | **v2.** Ausente = `true`. `false` (só em perguntas) faz o app mostrar "Pular". |
+| `maxLength` | `number` | não | **v2.** Limite da resposta aberta, inteiro de 1 a 5000. Ausente = `500`. Só tem efeito em `open_text` (nos outros tipos o painel grava 500). |
+| `placeholder` | `LocalizedText \| null` | não | **v2.** Texto de exemplo dentro do campo da resposta aberta. Só em `open_text`. |
+| `tipIds` | `string[]` | — | **Calculado pelo painel** a cada gravação: todas as dicas que o passo usa (`infoFlag.tipId` + `options[].tipId`). Existe para o painel saber onde uma dica é usada (consulta `array-contains`). **Os apps não precisam ler.** |
 | auditoria | | sim | |
 
 \* Um passo precisa ter `text` **ou** `image` (ou ambos); um vídeo também precisa de `videoUrl`.
+
+**Regras por tipo de resposta** (v2, validadas pelo painel ao salvar e ao publicar):
+
+| `answerType` | Opções | Salto por opção (`options[].nextStepId`) | Observações |
+| --- | --- | --- | --- |
+| `single_choice` | ao menos 1 | vale | comportamento de antes da v2 |
+| `yes_no` | **exatamente 2** (ex.: "Sim" / "Não", texto livre e traduzido) | vale | o app mostra lado a lado |
+| `multiple_choice` | ao menos 1 | **não vale** (o painel grava `null`): nenhuma opção sozinha decide | segue `nextStepId` do passo |
+| `open_text` | **nenhuma** (`[]`) | — | segue `nextStepId` do passo; usa `maxLength` e `placeholder` |
+
+Campos v2 ausentes (documentos gravados antes) valem os padrões acima, e o app se comporta como antes: escolha única, obrigatória.
 
 **`StepOption`** (embutida no passo — as opções são poucas e sempre editadas junto com ele):
 
@@ -115,7 +133,8 @@ O ID do documento é o **ID do passo**, usado pelos saltos. Ele é estável: reo
 | `text` | `LocalizedText \| null` | * | Texto da opção. |
 | `image` | `ImageRef \| null` | * | Imagem da opção. |
 | `promptInstruction` | `string \| null` | não | Instrução para a IA quando esta opção é escolhida. |
-| `nextStepId` | `string \| null` | não | Salto desta opção; sobrescreve o `nextStepId` do passo. |
+| `nextStepId` | `string \| null` | não | Salto desta opção; sobrescreve o `nextStepId` do passo. Só em `single_choice` e `yes_no` (nos outros tipos é sempre `null`). |
+| `tipId` | `string \| null` | não | **v2.** Dica (`tips/{tipId}`) mostrada **enquanto a opção está selecionada**. Tem prioridade sobre a dica do `infoFlag`. Dica inativa = sem dica. Mesmas checagens do `infoFlag.tipId`. |
 
 \* `text` **ou** `image` (ou ambos).
 
@@ -131,9 +150,11 @@ O ID do documento é o **ID do passo**, usado pelos saltos. Ele é estável: reo
 
 Para decidir o passo seguinte, o app usa o primeiro destes que existir:
 
-1. `nextStepId` da **opção escolhida**;
+1. `nextStepId` da **opção escolhida**: só em `single_choice` e `yes_no`;
 2. `nextStepId` do **passo**;
 3. o próximo passo por `order`; se não houver, o questionário termina.
+
+Na `multiple_choice` e na `open_text` o salto é sempre o do passo (regras 2 e 3). **"Pular"** (pergunta com `required: false`) também segue o salto do passo, nunca o de uma opção. Implementação de referência: `src/features/questionnaires/domain/flow.ts` (`resolveNext`, `transitionsOf`).
 
 `nextStepId` aceita o ID de um passo do **mesmo questionário** ou o valor especial **`"__end__"`**, que encerra o questionário. O fluxo **não pode ter ciclo**, nem mesmo um com saída: todo caminho chega ao fim em número finito de passos, e o app nunca vê o mesmo passo duas vezes numa execução. O painel valida isso, e que todo salto aponta para um passo existente, ao salvar e ao excluir passos (mudar a ordem também pode criar um ciclo). Ao **excluir** um passo, o painel zera (`null`) os saltos que apontavam para ele, então ninguém fica com salto para um passo que não existe.
 
@@ -246,7 +267,7 @@ Consultas previstas dos apps (em `firestore.indexes.json`):
 | Dicas ativas de uma categoria, por ordem | `tips`: `status` + `categoryId` + `order` |
 | Categorias, anunciantes e dicas ativos, por ordem | `status` + `order` em `questionnaireCategories`, `tipCategories`, `advertisers`, `tips` |
 | Passos de um questionário | `steps` ordenado por `order` (índice automático) |
-| Passos ligados a uma dica (painel, ao excluir/desativar dica) | `fieldOverrides`: `steps.infoFlag.tipId` em escopo **COLLECTION_GROUP** |
+| Passos ligados a uma dica (painel, ao excluir/desativar dica) | `fieldOverrides`: `steps.tipIds` (`array-contains`) e `steps.infoFlag.tipId` (passos gravados antes do `tipIds`), em escopo **COLLECTION_GROUP** |
 | Histórico e extrato do usuário, mais recentes primeiro | `createdAt` desc (índice automático) |
 
 > Os apps devem **sempre** filtrar por `status` nas consultas de conteúdo: o Firestore recusa uma consulta que possa devolver documentos que as regras não deixam ler.

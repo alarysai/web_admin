@@ -1,12 +1,11 @@
 import { readInteger, readLocalizedText, readOptionalLocalizedText, readString } from "@/lib/forms/form-data";
 
+import { ANSWER_TYPES, answerTypeHasOptions, DEFAULT_ANSWER_FIELDS, optionJumpsApply, type AnswerType } from "../domain/schemas";
+
 /**
  * Field names of the step form. Option fields are named by the option's stable
  * id (`options.<id>.<field>`), not by position, so removing an option never
  * shifts the values of the others. Their order is the order in the form.
- *
- * Jumps (`nextStepId`) and the info flag tip travel as hidden fields, so saving
- * keeps what the jump editor (delivery 3) and tips (3.4) will set.
  */
 const OPTION_ID_FIELD = /^options\.([^.]+)\.id$/;
 
@@ -31,20 +30,35 @@ function readInfoFlag(formData: FormData) {
   };
 }
 
+/** Unknown or missing answer type reads as the default; the schema only sees known values. */
+function readAnswerType(formData: FormData): AnswerType {
+  const value = readString(formData, "answerType");
+  return (ANSWER_TYPES as readonly string[]).includes(value) ? (value as AnswerType) : DEFAULT_ANSWER_FIELDS.answerType;
+}
+
+/** Blank limit means "use the default"; anything else goes to the schema (1 to 5000). */
+function readMaxLength(formData: FormData): number {
+  return readString(formData, "maxLength").trim() === "" ? DEFAULT_ANSWER_FIELDS.maxLength : readInteger(formData, "maxLength");
+}
+
 /**
  * FormData → object for stepSchema. Fields that do not belong to the chosen
- * type are dropped (a video has no options, a question has no video link), so
- * switching the type in the form never saves leftovers.
+ * type are dropped or reset, so switching type in the form never saves
+ * leftovers: a video has no options and no answer settings; an open answer has
+ * no options; option jumps only exist where an option decides the next step.
  */
 export function readStepForm(formData: FormData) {
   const type = readString(formData, "type");
+  const isQuestion = type === "question";
+  const answerType = isQuestion ? readAnswerType(formData) : DEFAULT_ANSWER_FIELDS.answerType;
 
   const options = optionIds(formData).map((id) => ({
     id,
     text: readOptionalLocalizedText(formData, `options.${id}.text`),
     image: null,
     promptInstruction: readString(formData, `options.${id}.promptInstruction`),
-    nextStepId: nullable(readString(formData, `options.${id}.nextStepId`)),
+    nextStepId: optionJumpsApply(answerType) ? nullable(readString(formData, `options.${id}.nextStepId`)) : null,
+    tipId: nullable(readString(formData, `options.${id}.tipId`)),
   }));
 
   return {
@@ -53,11 +67,17 @@ export function readStepForm(formData: FormData) {
     text: readOptionalLocalizedText(formData, "text"),
     image: null,
     videoUrl: type === "video" ? nullable(readString(formData, "videoUrl")) : null,
-    options: type === "question" ? options : [],
+    options: isQuestion && answerTypeHasOptions(answerType) ? options : [],
     nextStepId: nullable(readString(formData, "nextStepId")),
     partOfPrompt: readString(formData, "partOfPrompt") === "on",
     promptInstruction: readString(formData, "promptInstruction"),
     infoFlag: readInfoFlag(formData),
+    answerType,
+    helpText: isQuestion ? readOptionalLocalizedText(formData, "helpText") : null,
+    // The checkbox is "Opcional (mostra Pular)": checked means not required.
+    required: isQuestion ? readString(formData, "optional") !== "on" : true,
+    maxLength: isQuestion && answerType === "open_text" ? readMaxLength(formData) : DEFAULT_ANSWER_FIELDS.maxLength,
+    placeholder: isQuestion && answerType === "open_text" ? readOptionalLocalizedText(formData, "placeholder") : null,
   };
 }
 

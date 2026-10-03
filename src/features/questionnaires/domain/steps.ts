@@ -18,12 +18,19 @@ export function nextStepOrder(steps: ReadonlyArray<{ order: number }>): number {
 
 /** Every translated text shown in the apps for one step. */
 export function stepTexts(step: Step): Array<LocalizedText | null> {
-  return [step.text, step.infoFlag?.label ?? null, ...step.options.map((option) => option.text)];
+  return [step.text, step.helpText, step.placeholder, step.infoFlag?.label ?? null, ...step.options.map((option) => option.text)];
+}
+
+/** Every tip a step links to (info flag and options), each once. */
+export function stepTipIds(step: Pick<Step, "infoFlag" | "options">): string[] {
+  const ids = [step.infoFlag?.tipId, ...step.options.map((option) => option.tipId)];
+  return [...new Set(ids.filter((id): id is string => Boolean(id)))];
 }
 
 /**
  * `questionnaires.languages`: languages in which the questionnaire AND all of
- * its steps and options are fully translated (docs/data-model.md).
+ * its steps (text, help text, placeholder, info flag) and options are fully
+ * translated (docs/data-model.md).
  */
 export function questionnaireLanguages(
   questionnaire: Pick<Questionnaire, "title" | "description">,

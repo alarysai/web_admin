@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { describeCycle, findCycle, resolveNext, stepsAfterDelete, transitionsOf, unreachableSteps, validateFlow } from "./flow";
 import type { StepRecord } from "./steps";
+import { DEFAULT_ANSWER_FIELDS } from "./schemas";
 
 function video(id: string, order: number, nextStepId: string | null = null): StepRecord {
   return {
@@ -16,6 +17,7 @@ function video(id: string, order: number, nextStepId: string | null = null): Ste
     partOfPrompt: false,
     promptInstruction: null,
     infoFlag: null,
+    ...DEFAULT_ANSWER_FIELDS,
   };
 }
 
@@ -30,6 +32,7 @@ function question(id: string, order: number, jumps: Array<string | null>, nextSt
       image: null,
       promptInstruction: null,
       nextStepId: jump,
+      tipId: null,
     })),
   };
 }
@@ -56,10 +59,10 @@ describe("transitionsOf", () => {
   it("has one transition per option in questions, and one in videos", () => {
     const steps = [question("q", 1, ["v", null]), video("v", 2)];
     expect(transitionsOf(steps[0], steps)).toEqual([
-      { optionId: "q-o1", target: "v" },
-      { optionId: "q-o2", target: "v" },
+      { via: "option", optionId: "q-o1", target: "v" },
+      { via: "option", optionId: "q-o2", target: "v" },
     ]);
-    expect(transitionsOf(steps[1], steps)).toEqual([{ optionId: null, target: null }]);
+    expect(transitionsOf(steps[1], steps)).toEqual([{ via: "continue", optionId: null, target: null }]);
   });
 });
 

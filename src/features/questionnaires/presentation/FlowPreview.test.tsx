@@ -9,6 +9,7 @@ import { unreachableSteps, validateFlow } from "../domain/flow";
 import type { StepRecord } from "../domain/steps";
 import { FlowMap } from "./FlowMap";
 import { FlowSimulator } from "./FlowSimulator";
+import { DEFAULT_ANSWER_FIELDS } from "../domain/schemas";
 
 afterEach(cleanup);
 
@@ -25,6 +26,7 @@ const steps: StepRecord[] = [
     partOfPrompt: false,
     promptInstruction: null,
     infoFlag: null,
+    ...DEFAULT_ANSWER_FIELDS,
   },
   {
     id: "tema",
@@ -34,13 +36,14 @@ const steps: StepRecord[] = [
     image: null,
     videoUrl: null,
     options: [
-      { id: "etica", text: { pt: "Ética", en: "Ethics", es: null }, image: null, promptInstruction: "foque em ética", nextStepId: "__end__" },
-      { id: "outro", text: { pt: "Outro", en: null, es: null }, image: null, promptInstruction: null, nextStepId: null },
+      { id: "etica", text: { pt: "Ética", en: "Ethics", es: null }, image: null, promptInstruction: "foque em ética", nextStepId: "__end__", tipId: null },
+      { id: "outro", text: { pt: "Outro", en: null, es: null }, image: null, promptInstruction: null, nextStepId: null, tipId: null },
     ],
     nextStepId: null,
     partOfPrompt: true,
     promptInstruction: null,
     infoFlag: { label: { pt: "Isso é ético?", en: null, es: null }, value: true, tipId: null },
+    ...DEFAULT_ANSWER_FIELDS,
   },
   {
     id: "fim",
@@ -54,10 +57,18 @@ const steps: StepRecord[] = [
     partOfPrompt: false,
     promptInstruction: null,
     infoFlag: null,
+    ...DEFAULT_ANSWER_FIELDS,
   },
 ];
 
 describe("FlowSimulator", () => {
+  const tipTexts = { consent: { pt: "Peça consentimento antes de usar fotos de pessoas.", en: null, es: null } };
+
+  async function choose(user: ReturnType<typeof userEvent.setup>, label: string) {
+    await user.click(screen.getByLabelText(label));
+    await user.click(screen.getByRole("button", { name: "Continuar" }));
+  }
+
   it("walks the flow following option jumps and shows the prompt parts", async () => {
     const user = userEvent.setup();
     render(<FlowSimulator steps={steps} />);
@@ -66,8 +77,8 @@ describe("FlowSimulator", () => {
     await user.click(screen.getByRole("button", { name: "Continuar" }));
 
     expect(screen.getByText("Qual tema?")).toBeInTheDocument();
-    expect(screen.getByText("Isso é ético? Sim")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Ética" }));
+    expect(screen.getByText("Dica: Isso é ético?")).toBeInTheDocument();
+    await choose(user, "Ética");
 
     expect(screen.getByText("Fim do questionário.")).toBeInTheDocument();
     expect(screen.getByText(/Resposta: “Ética”/)).toBeInTheDocument();
@@ -78,11 +89,19 @@ describe("FlowSimulator", () => {
     const user = userEvent.setup();
     render(<FlowSimulator steps={steps} />);
     await user.click(screen.getByRole("button", { name: "Continuar" }));
-    await user.click(screen.getByRole("button", { name: "Outro" }));
+    await choose(user, "Outro");
     expect(screen.getByText("Obrigado")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Recomeçar" }));
     expect(screen.getByText("Assista à introdução")).toBeInTheDocument();
+  });
+
+  it("needs a choice before continuing a required question", async () => {
+    const user = userEvent.setup();
+    render(<FlowSimulator steps={steps} />);
+    await user.click(screen.getByRole("button", { name: "Continuar" }));
+    expect(screen.getByRole("button", { name: "Continuar" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Pular" })).not.toBeInTheDocument();
   });
 
   it("switches language with fallback to Portuguese", async () => {
@@ -91,8 +110,70 @@ describe("FlowSimulator", () => {
     await user.selectOptions(screen.getByLabelText("Idioma"), "en");
     expect(screen.getByText("Watch the intro")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Continuar" }));
-    expect(screen.getByRole("button", { name: "Ethics" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Outro" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Ethics")).toBeInTheDocument();
+    expect(screen.getByLabelText("Outro")).toBeInTheDocument();
+  });
+
+  it("shows the selected option's tip, over the info flag tip", async () => {
+    const user = userEvent.setup();
+    const withTips: StepRecord[] = [
+      {
+        ...steps[1],
+        infoFlag: null,
+        options: [{ ...steps[1].options[0], tipId: "consent" }, steps[1].options[1]],
+      },
+    ];
+    render(<FlowSimulator steps={withTips} tipTexts={tipTexts} />);
+    expect(screen.queryByText(/consentimento/)).not.toBeInTheDocument();
+    await user.click(screen.getByLabelText("Ética"));
+    expect(screen.getByText("Peça consentimento antes de usar fotos de pessoas.")).toBeInTheDocument();
+    await user.click(screen.getByLabelText("Outro"));
+    expect(screen.queryByText(/consentimento/)).not.toBeInTheDocument();
+  });
+
+  it("multiple choice: checkboxes, the step's jump, answers in the step's order", async () => {
+    const user = userEvent.setup();
+    const multiple: StepRecord[] = [{ ...steps[1], answerType: "multiple_choice", infoFlag: null }, steps[2]];
+    render(<FlowSimulator steps={multiple} />);
+    expect(screen.getByLabelText("Ética")).toHaveAttribute("type", "checkbox");
+
+    await user.click(screen.getByLabelText("Outro"));
+    await user.click(screen.getByLabelText("Ética"));
+    await user.click(screen.getByRole("button", { name: "Continuar" }));
+
+    // Ética jumps to the end in single choice; in multiple choice the step's flow (order) wins.
+    expect(screen.getByText("Obrigado")).toBeInTheDocument();
+    expect(screen.getByText(/Resposta: “Ética, Outro”/)).toBeInTheDocument();
+  });
+
+  it("open text: limit counter, placeholder and the typed answer", async () => {
+    const user = userEvent.setup();
+    const open: StepRecord[] = [
+      {
+        ...steps[1],
+        answerType: "open_text",
+        options: [],
+        infoFlag: null,
+        maxLength: 20,
+        placeholder: { pt: "Descreva a cena", en: null, es: null },
+      },
+    ];
+    render(<FlowSimulator steps={open} />);
+    const field = screen.getByPlaceholderText("Descreva a cena");
+    expect(field).toHaveAttribute("maxLength", "20");
+    await user.type(field, "Um gato astronauta");
+    expect(screen.getByText("18/20")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Continuar" }));
+    expect(screen.getByText(/Resposta: “Um gato astronauta”/)).toBeInTheDocument();
+  });
+
+  it("optional questions can be skipped, following the step's jump", async () => {
+    const user = userEvent.setup();
+    const optional: StepRecord[] = [{ ...steps[1], required: false, infoFlag: null }, steps[2]];
+    render(<FlowSimulator steps={optional} />);
+    expect(screen.getByRole("button", { name: "Continuar" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Pular" }));
+    expect(screen.getByText("Obrigado")).toBeInTheDocument();
   });
 
   it("reports a jump to a missing step instead of breaking", async () => {
@@ -108,6 +189,14 @@ describe("FlowMap", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Fluxo válido");
     expect(screen.getByText("“Ética” → Fim")).toBeInTheDocument();
     expect(screen.getByText("“Outro” → #3 · Obrigado")).toBeInTheDocument();
+  });
+
+  it("shows Continuar for multiple choice and Pular for optional questions", () => {
+    const flow: StepRecord[] = [{ ...steps[1], answerType: "multiple_choice", required: false }, steps[2]];
+    render(<FlowMap steps={flow} issues={validateFlow(flow)} unreachable={unreachableSteps(flow)} />);
+    expect(screen.getByText("Continuar → #3 · Obrigado")).toBeInTheDocument();
+    expect(screen.getByText("Pular → #3 · Obrigado")).toBeInTheDocument();
+    expect(screen.getByText(/Múltipla escolha · opcional/)).toBeInTheDocument();
   });
 
   it("shows cycles and unreachable steps", () => {

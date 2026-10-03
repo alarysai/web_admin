@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { StepRecord } from "../domain/steps";
 import { StepList } from "./StepList";
+import { DEFAULT_ANSWER_FIELDS } from "../domain/schemas";
 
 afterEach(cleanup);
 
@@ -22,6 +23,7 @@ const steps: StepRecord[] = [
     partOfPrompt: false,
     promptInstruction: null,
     infoFlag: null,
+    ...DEFAULT_ANSWER_FIELDS,
   },
   {
     id: "s2",
@@ -31,13 +33,14 @@ const steps: StepRecord[] = [
     image: null,
     videoUrl: null,
     options: [
-      { id: "a", text: { pt: "A", en: null, es: null }, image: null, promptInstruction: null, nextStepId: null },
-      { id: "b", text: { pt: "B", en: null, es: null }, image: null, promptInstruction: null, nextStepId: null },
+      { id: "a", text: { pt: "A", en: null, es: null }, image: null, promptInstruction: null, nextStepId: null, tipId: null },
+      { id: "b", text: { pt: "B", en: null, es: null }, image: null, promptInstruction: null, nextStepId: null, tipId: null },
     ],
     nextStepId: null,
     partOfPrompt: true,
     promptInstruction: null,
     infoFlag: { label: { pt: "Isso é ético?", en: null, es: null }, value: true, tipId: null },
+    ...DEFAULT_ANSWER_FIELDS,
   },
 ];
 

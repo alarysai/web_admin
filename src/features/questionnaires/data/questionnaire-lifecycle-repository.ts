@@ -8,7 +8,7 @@ import { getAdminFirestore } from "@/lib/firebase/admin/firestore";
 import { copyTitle, duplicateSteps } from "../domain/lifecycle";
 import type { QuestionnaireStatus } from "../domain/schemas";
 import { QUESTIONNAIRES_COLLECTION } from "./questionnaires-repository";
-import { listSteps, refreshQuestionnaireLanguages, STEPS_SUBCOLLECTION } from "./steps-repository";
+import { listSteps, refreshQuestionnaireLanguages, stepDocument, STEPS_SUBCOLLECTION } from "./steps-repository";
 
 /** Firestore batches take at most 500 writes; stay below it. */
 const BATCH_LIMIT = 450;
@@ -62,7 +62,7 @@ export async function duplicateQuestionnaire(id: string, adminUid: string): Prom
         publishedAt: null,
         ...audit,
       }),
-    ...steps.map(({ id: stepId, ...step }) => (batch: WriteBatch) => batch.set(stepsRef.doc(stepId), { ...step, ...audit })),
+    ...steps.map(({ id: stepId, ...step }) => (batch: WriteBatch) => batch.set(stepsRef.doc(stepId), { ...stepDocument(step), ...audit })),
   ]);
   return copyRef.id;
 }

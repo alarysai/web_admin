@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { clearJumpsTo, nextStepOrder, questionnaireLanguages, sortSteps, type StepRecord } from "./steps";
+import { DEFAULT_ANSWER_FIELDS } from "./schemas";
 
 const full = (word: string) => ({ pt: word, en: `${word}-en`, es: `${word}-es` });
 const ptOnly = (word: string) => ({ pt: word, en: null, es: null });
@@ -13,11 +14,12 @@ function step(id: string, overrides: Partial<StepRecord> = {}): StepRecord {
     text: full(id),
     image: null,
     videoUrl: null,
-    options: [{ id: `${id}-o1`, text: full("opção"), image: null, promptInstruction: null, nextStepId: null }],
+    options: [{ id: `${id}-o1`, text: full("opção"), image: null, promptInstruction: null, nextStepId: null, tipId: null }],
     nextStepId: null,
     partOfPrompt: false,
     promptInstruction: null,
     infoFlag: null,
+    ...DEFAULT_ANSWER_FIELDS,
     ...overrides,
   };
 }
@@ -46,7 +48,7 @@ describe("questionnaireLanguages", () => {
 
   it("drops a language missing in any option", () => {
     const s = step("s1", {
-      options: [{ id: "o1", text: { pt: "Sim", en: "Yes", es: null }, image: null, promptInstruction: null, nextStepId: null }],
+      options: [{ id: "o1", text: { pt: "Sim", en: "Yes", es: null }, image: null, promptInstruction: null, nextStepId: null, tipId: null }],
     });
     expect(questionnaireLanguages(questionnaire, [s])).toEqual(["pt", "en"]);
   });
@@ -67,8 +69,8 @@ describe("clearJumpsTo", () => {
       step("s1", { nextStepId: "s3" }),
       step("s2", {
         options: [
-          { id: "a", text: full("a"), image: null, promptInstruction: null, nextStepId: "s3" },
-          { id: "b", text: full("b"), image: null, promptInstruction: null, nextStepId: "__end__" },
+          { id: "a", text: full("a"), image: null, promptInstruction: null, nextStepId: "s3", tipId: null },
+          { id: "b", text: full("b"), image: null, promptInstruction: null, nextStepId: "__end__", tipId: null },
         ],
       }),
       step("s3"),

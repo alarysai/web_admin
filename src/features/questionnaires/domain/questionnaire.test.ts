@@ -10,6 +10,7 @@ function questionnaire(id: string, overrides: Partial<Questionnaire> = {}): Ques
     categoryId: "c1",
     languages: ["pt"],
     order: 0,
+    creditCost: null,
     status: "draft",
     updatedAt: null,
     ...overrides,

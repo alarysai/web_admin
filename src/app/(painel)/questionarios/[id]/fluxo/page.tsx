@@ -7,11 +7,14 @@ import { listSteps } from "@/features/questionnaires/data/steps-repository";
 import { unreachableSteps, validateFlow } from "@/features/questionnaires/domain/flow";
 import { FlowMap } from "@/features/questionnaires/presentation/FlowMap";
 import { FlowSimulator } from "@/features/questionnaires/presentation/FlowSimulator";
+import { listTips } from "@/features/tips/data/tips-repository";
 
 export default async function FlowPreviewPage({ params }: PageProps<"/questionarios/[id]/fluxo">) {
   const { id } = await params;
-  const [questionnaire, steps] = await Promise.all([findQuestionnaire(id), listSteps(id)]);
+  const [questionnaire, steps, tips] = await Promise.all([findQuestionnaire(id), listSteps(id), listTips()]);
   if (!questionnaire) notFound();
+  // Only active tips, like the app: an inactive tip is simply not shown.
+  const tipTexts = Object.fromEntries(tips.filter((tip) => tip.status === "active").map((tip) => [tip.id, tip.text]));
 
   return (
     <>
@@ -20,7 +23,7 @@ export default async function FlowPreviewPage({ params }: PageProps<"/questionar
         Voltar para o questionário
       </Link>
       <div className="grid gap-8 lg:grid-cols-2">
-        <FlowSimulator steps={steps} />
+        <FlowSimulator steps={steps} tipTexts={tipTexts} />
         <FlowMap steps={steps} issues={validateFlow(steps)} unreachable={unreachableSteps(steps)} />
       </div>
     </>

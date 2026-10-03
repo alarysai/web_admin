@@ -9,6 +9,7 @@ import { formError, formSuccess } from "@/lib/forms/form-state";
 
 import type { StepRecord } from "../domain/steps";
 import { StepForm, type StepFormAction } from "./StepForm";
+import { DEFAULT_ANSWER_FIELDS } from "../domain/schemas";
 
 afterEach(cleanup);
 
@@ -20,13 +21,14 @@ const saved: StepRecord = {
   image: null,
   videoUrl: null,
   options: [
-    { id: "o1", text: { pt: "Ética", en: "Ethics", es: null }, image: null, promptInstruction: "fale de ética", nextStepId: "s5" },
-    { id: "o2", text: { pt: "Redação", en: null, es: null }, image: null, promptInstruction: null, nextStepId: null },
+    { id: "o1", text: { pt: "Ética", en: "Ethics", es: null }, image: null, promptInstruction: "fale de ética", nextStepId: "s5", tipId: null },
+    { id: "o2", text: { pt: "Redação", en: null, es: null }, image: null, promptInstruction: null, nextStepId: null, tipId: null },
   ],
   nextStepId: "__end__",
   partOfPrompt: true,
   promptInstruction: null,
   infoFlag: null,
+  ...DEFAULT_ANSWER_FIELDS,
 };
 
 function renderForm(props: Partial<Parameters<typeof StepForm>[0]> = {}) {
@@ -188,5 +190,76 @@ describe("StepForm tip link", () => {
     });
     expect(screen.getByLabelText("Dica relacionada")).toHaveValue("gone");
     expect(screen.getByRole("option", { name: "Dica inexistente (gone)" })).toBeInTheDocument();
+  });
+});
+
+describe("StepForm answer types (v2)", () => {
+  it("open text hides the options and shows limit and placeholder", async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await user.selectOptions(screen.getByLabelText("Tipo de resposta *"), "open_text");
+    expect(screen.queryByText("Opções de resposta")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Limite de caracteres")).toHaveValue(500);
+    expect(screen.getByText("Texto de exemplo no campo")).toBeInTheDocument();
+  });
+
+  it("multiple choice hides the option jumps but keeps the option tips", async () => {
+    const user = userEvent.setup();
+    renderForm();
+    expect(screen.getByLabelText("Depois desta opção")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Tipo de resposta *"), "multiple_choice");
+    expect(screen.queryByLabelText("Depois desta opção")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Dica desta opção (opcional)")).toBeInTheDocument();
+    expect(screen.getByText(/o salto é sempre este/)).toBeInTheDocument();
+  });
+
+  it("yes/no explains the two-option rule", async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await user.selectOptions(screen.getByLabelText("Tipo de resposta *"), "yes_no");
+    expect(screen.getByText(/exatamente 2 opções/)).toBeInTheDocument();
+  });
+
+  it("videos have no answer settings", async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await user.click(screen.getByLabelText("Vídeo", { selector: "input" }));
+    expect(screen.queryByLabelText("Tipo de resposta *")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Opcional/)).not.toBeInTheDocument();
+  });
+
+  it("shows a saved optional open question and submits its settings", async () => {
+    const openStep = {
+      ...saved,
+      options: [],
+      answerType: "open_text" as const,
+      required: false,
+      maxLength: 280,
+      helpText: { pt: "Quanto mais detalhes, melhor.", en: null, es: null },
+      placeholder: { pt: "Ex.: um gato astronauta", en: null, es: null },
+    };
+    const action = renderForm({ step: openStep, defaultOrder: 2 });
+    expect(screen.getByLabelText("Tipo de resposta *")).toHaveValue("open_text");
+    expect(screen.getByLabelText(/Opcional/)).toBeChecked();
+    expect(screen.getByLabelText("Limite de caracteres")).toHaveValue(280);
+    expect(screen.getByDisplayValue("Quanto mais detalhes, melhor.")).toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Salvar passo" }));
+    await screen.findByRole("status");
+    const data = action.mock.calls[0][1];
+    expect(data.get("answerType")).toBe("open_text");
+    expect(data.get("optional")).toBe("on");
+    expect(data.get("maxLength")).toBe("280");
+    expect(data.get("placeholder.pt")).toBe("Ex.: um gato astronauta");
+  });
+
+  it("lets an option link to a tip and keeps a deleted one visible", async () => {
+    const withTip = { ...saved, options: [{ ...saved.options[0], tipId: "gone" }, saved.options[1]] };
+    renderForm({ step: withTip, defaultOrder: 2 });
+    const [first, second] = screen.getAllByLabelText("Dica desta opção (opcional)");
+    expect(first).toHaveValue("gone");
+    expect(within(first).getByRole("option", { name: "Dica inexistente (gone)" })).toBeInTheDocument();
+    await userEvent.setup().selectOptions(second, "t1");
+    expect(second).toHaveValue("t1");
   });
 });

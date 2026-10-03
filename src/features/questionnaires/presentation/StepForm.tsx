@@ -11,18 +11,31 @@ import { TextField } from "@/components/form/TextField";
 import { initialFormState, type FormState } from "@/lib/forms/form-state";
 import { resolveValues } from "@/lib/forms/initial-values";
 
-import { STEP_TYPES, type StepType } from "../domain/schemas";
+import {
+  ANSWER_TYPE_LABELS,
+  ANSWER_TYPES,
+  answerTypeHasOptions,
+  MAX_LENGTH_LIMIT,
+  optionJumpsApply,
+  STEP_TYPES,
+  type AnswerType,
+  type StepType,
+} from "../domain/schemas";
 import type { StepRecord } from "../domain/steps";
 import { jumpChoices, type JumpTarget } from "./jump-choices";
 import { StepOptionsEditor } from "./StepOptionsEditor";
-import { newOptionId, STEP_TYPE_LABELS, stepSavedValues } from "./step-values";
+import { newOptionId, STEP_TYPE_LABELS, stepSavedValues, tipSelectOptions } from "./step-values";
 
 export type StepFormAction = (previous: FormState, formData: FormData) => Promise<FormState>;
 
-/** Keeps a linked tip that no longer exists visible, so it is not dropped silently on save. */
-function tipSelectOptions(choices: ReadonlyArray<{ value: string; label: string }>, current: string) {
-  if (!current || choices.some((choice) => choice.value === current)) return choices;
-  return [...choices, { value: current, label: `Dica inexistente (${current})` }];
+const ANSWER_TYPE_OPTIONS = ANSWER_TYPES.map((answerType) => ({ value: answerType, label: ANSWER_TYPE_LABELS[answerType] }));
+
+/** What the "Próximo passo" field means for the chosen type. */
+function nextStepHint(type: StepType, answerType: AnswerType): string {
+  const noCycles = "O fluxo não pode ter ciclos: todo caminho precisa chegar ao fim.";
+  if (type === "video") return noCycles;
+  if (optionJumpsApply(answerType)) return `Vale para as opções sem destino próprio e para “Pular”. ${noCycles}`;
+  return `Na múltipla escolha e na resposta aberta, o salto é sempre este (e também o de “Pular”). ${noCycles}`;
 }
 
 type StepFormProps = {
@@ -55,6 +68,9 @@ export function StepForm({
 
   // UI state: which type is selected, which options exist, whether the info flag is on.
   const [type, setType] = useState<StepType>(values.type === "video" ? "video" : "question");
+  const [answerType, setAnswerType] = useState<AnswerType>(
+    (ANSWER_TYPES as readonly string[]).includes(values.answerType) ? (values.answerType as AnswerType) : "single_choice",
+  );
   const [optionIds, setOptionIds] = useState<string[]>(() =>
     step && step.options.length > 0 ? step.options.map((option) => option.id) : [initialOptionId],
   );
@@ -96,6 +112,46 @@ export function StepForm({
 
       <LocalizedTextFields name="text" label={type === "video" ? "Descrição do vídeo" : "Pergunta"} values={values} errors={errors} />
 
+      {type === "question" && (
+        <section aria-labelledby="answer-heading" className="flex flex-col gap-3 rounded-md border border-zinc-200 p-4">
+          <h2 id="answer-heading" className="text-sm font-semibold">
+            Resposta
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SelectField
+              name="answerType"
+              label="Tipo de resposta *"
+              options={ANSWER_TYPE_OPTIONS}
+              value={answerType}
+              onChange={(event) => setAnswerType(event.target.value as AnswerType)}
+              error={errors.answerType}
+            />
+            <label className="flex items-center gap-2 self-end pb-2 text-sm">
+              <input type="checkbox" name="optional" defaultChecked={values.optional === "on"} />
+              Opcional (o app mostra “Pular”)
+            </label>
+          </div>
+          <LocalizedTextFields name="helpText" label="Texto de ajuda" values={values} errors={errors} optional />
+          {answerType === "open_text" && (
+            <>
+              <TextField
+                name="maxLength"
+                label="Limite de caracteres"
+                type="number"
+                min={1}
+                max={MAX_LENGTH_LIMIT}
+                step={1}
+                defaultValue={values.maxLength}
+                error={errors.maxLength}
+                hint={`De 1 a ${MAX_LENGTH_LIMIT}. O app mostra o contador (ex.: 94/500).`}
+                className="max-w-xs"
+              />
+              <LocalizedTextFields name="placeholder" label="Texto de exemplo no campo" values={values} errors={errors} optional />
+            </>
+          )}
+        </section>
+      )}
+
       {type === "video" ? (
         <TextField
           name="videoUrl"
@@ -108,14 +164,19 @@ export function StepForm({
           required
         />
       ) : (
-        <StepOptionsEditor
-          optionIds={optionIds}
-          jumpTargets={jumpTargets}
-          values={values}
-          errors={errors}
-          onAdd={() => setOptionIds((ids) => [...ids, newOptionId()])}
-          onRemove={(id) => setOptionIds((ids) => ids.filter((optionId) => optionId !== id))}
-        />
+        answerTypeHasOptions(answerType) && (
+          <StepOptionsEditor
+            optionIds={optionIds}
+            jumpTargets={jumpTargets}
+            showJumps={optionJumpsApply(answerType)}
+            tipChoices={tipChoices}
+            hint={answerType === "yes_no" ? "Sim ou não: exatamente 2 opções (ex.: “Sim” e “Não”, traduzidas)." : undefined}
+            values={values}
+            errors={errors}
+            onAdd={() => setOptionIds((ids) => [...ids, newOptionId()])}
+            onRemove={(id) => setOptionIds((ids) => ids.filter((optionId) => optionId !== id))}
+          />
+        )
       )}
 
       <section aria-labelledby="flow-heading" className="flex flex-col gap-3 rounded-md border border-zinc-200 p-4">
@@ -129,11 +190,7 @@ export function StepForm({
           defaultValue={values.nextStepId}
           error={errors.nextStepId}
         />
-        <p className="text-xs text-zinc-500">
-          {type === "question"
-            ? "Vale para as opções que não têm um destino próprio. O fluxo não pode ter ciclos: todo caminho precisa chegar ao fim."
-            : "O fluxo não pode ter ciclos: todo caminho precisa chegar ao fim."}
-        </p>
+        <p className="text-xs text-zinc-500">{nextStepHint(type, answerType)}</p>
       </section>
 
       <section aria-labelledby="prompt-heading" className="flex flex-col gap-3 rounded-md border border-zinc-200 p-4">

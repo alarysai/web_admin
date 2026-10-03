@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { questionnaireInputSchema, stepOptionSchema, stepSchema, type Step } from "./schemas";
+import { DEFAULT_ANSWER_FIELDS } from "./schemas";
 
 const text = { pt: "Texto", en: null, es: null };
 
@@ -9,7 +10,7 @@ function issuePaths(result: { success: boolean; error?: { issues: { path: Proper
 }
 
 describe("questionnaireInputSchema", () => {
-  const valid = { title: { pt: "Ética na IA", en: "", es: "" }, description: null, categoryId: "c1", order: 0 };
+  const valid = { title: { pt: "Ética na IA", en: "", es: "" }, description: null, categoryId: "c1", order: 0, creditCost: null };
 
   it("accepts a valid questionnaire", () => {
     expect(questionnaireInputSchema.parse(valid)).toEqual({ ...valid, title: { pt: "Ética na IA", en: null, es: null } });
@@ -32,7 +33,7 @@ describe("questionnaireInputSchema", () => {
 });
 
 describe("stepOptionSchema", () => {
-  const option = { id: "o1", text, image: null, promptInstruction: "  ", nextStepId: null };
+  const option = { id: "o1", text, image: null, promptInstruction: "  ", nextStepId: null, tipId: null };
 
   it("accepts an option with text and normalizes a blank instruction", () => {
     expect(stepOptionSchema.parse(option).promptInstruction).toBeNull();
@@ -49,7 +50,7 @@ describe("stepOptionSchema", () => {
 });
 
 describe("stepSchema", () => {
-  const option = { id: "o1", text, image: null, promptInstruction: null, nextStepId: null };
+  const option = { id: "o1", text, image: null, promptInstruction: null, nextStepId: null, tipId: null };
   const question: Step = {
     order: 1,
     type: "question",
@@ -61,6 +62,7 @@ describe("stepSchema", () => {
     partOfPrompt: true,
     promptInstruction: null,
     infoFlag: null,
+    ...DEFAULT_ANSWER_FIELDS,
   };
   const video: Step = { ...question, type: "video", options: [], videoUrl: "https://youtu.be/abc" };
 

@@ -49,6 +49,24 @@ function flowErrors(candidate: StepRecord, existing: StepRecord[]) {
   return { fieldErrors, cycleMessage };
 }
 
+const TIP_NOT_FOUND = "Dica não encontrada. Ela pode ter sido excluída.";
+
+/** Linked tips (info flag and each option) must exist; errors land on the field that links them. */
+async function missingTipErrors(step: Step, tipExists: (tipId: string) => Promise<boolean>) {
+  const links: Array<[field: string, tipId: string | null]> = [
+    ["infoFlag.tipId", step.infoFlag?.tipId ?? null],
+    ...step.options.map((option): [string, string | null] => [`options.${option.id}.tipId`, option.tipId]),
+  ];
+  const errors: Record<string, string> = {};
+  const checked = new Map<string, boolean>();
+  for (const [field, tipId] of links) {
+    if (!tipId) continue;
+    if (!checked.has(tipId)) checked.set(tipId, await tipExists(tipId));
+    if (!checked.get(tipId)) errors[field] = TIP_NOT_FOUND;
+  }
+  return errors;
+}
+
 /** Create (stepId = null) or update a step. Checks the admin on every call. */
 export async function saveStep(
   questionnaireId: string,
@@ -82,12 +100,9 @@ export async function saveStep(
   }
   if (cycleMessage) return { ok: false, state: formError(cycleMessage, values) };
 
-  const tipId = parsed.data.infoFlag?.tipId;
-  if (tipId && !(await deps.tipExists(tipId))) {
-    return {
-      ok: false,
-      state: formError("Revise os campos destacados.", values, { "infoFlag.tipId": "Dica não encontrada. Ela pode ter sido excluída." }),
-    };
+  const tipErrors = await missingTipErrors(parsed.data, deps.tipExists);
+  if (Object.keys(tipErrors).length > 0) {
+    return { ok: false, state: formError("Revise os campos destacados.", values, tipErrors) };
   }
 
   if (stepId === null) {

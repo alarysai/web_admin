@@ -37,6 +37,7 @@ const expectedInput = {
   description: null,
   categoryId: "c1",
   order: 2,
+  creditCost: null,
 };
 
 describe("saveQuestionnaire", () => {

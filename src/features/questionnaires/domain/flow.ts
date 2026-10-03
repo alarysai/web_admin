@@ -1,4 +1,4 @@
-import { END_OF_QUESTIONNAIRE, type Step, type StepOption } from "./schemas";
+import { END_OF_QUESTIONNAIRE, optionJumpsApply, type Step, type StepOption } from "./schemas";
 import { clearJumpsTo, sortSteps, type StepRecord } from "./steps";
 
 /**
@@ -6,15 +6,28 @@ import { clearJumpsTo, sortSteps, type StepRecord } from "./steps";
  *
  * The next step is the first that exists of: the chosen option's jump, the
  * step's jump, the next step by `order`; with none, the questionnaire ends.
+ * Option jumps only count where one option decides (single choice, yes/no);
+ * multiple choice, open answers and "Pular" (optional questions) follow the
+ * step's jump.
  * A valid flow has every jump pointing to an existing step (or "__end__") and
  * NO cycle at all, so every path ends after a finite number of steps.
  */
 
-export type FlowStep = Pick<Step, "type" | "nextStepId" | "options"> & { id: string; order: number };
+export type FlowStep = Pick<Step, "type" | "nextStepId" | "options" | "answerType" | "required"> & { id: string; order: number };
 
-/** Where a path goes after `step` (and `option`, for questions). `null` = end. */
+/** Whether this step's options carry their own jump. */
+function usesOptionJumps(step: FlowStep): boolean {
+  return step.type === "question" && optionJumpsApply(step.answerType);
+}
+
+/**
+ * Where a path goes after `step`. `option` is the chosen option of a single
+ * choice / yes-no question; pass null for videos, multiple choice, open
+ * answers and skips. `null` = end.
+ */
 export function resolveNext(step: FlowStep, option: Pick<StepOption, "nextStepId"> | null, ordered: FlowStep[]): string | null {
-  const jump = option?.nextStepId ?? step.nextStepId;
+  const optionJump = option && usesOptionJumps(step) ? option.nextStepId : null;
+  const jump = optionJump ?? step.nextStepId;
   if (jump === END_OF_QUESTIONNAIRE) return null;
   if (jump) return jump;
   const index = ordered.findIndex((candidate) => candidate.id === step.id);
@@ -22,17 +35,27 @@ export function resolveNext(step: FlowStep, option: Pick<StepOption, "nextStepId
 }
 
 export type Transition = {
-  /** null for the step-level transition (videos, or questions without options). */
+  /** "option": choosing that option · "continue": the step-level way out · "skip": "Pular" on an optional question. */
+  via: "option" | "continue" | "skip";
+  /** Set only when via == "option". */
   optionId: string | null;
   target: string | null;
 };
 
-/** Every way out of a step: one per option for questions, one for videos. */
+/**
+ * Every way out of a step: one per option when options decide the jump
+ * (single choice, yes/no), otherwise a single "continue"; optional questions
+ * also get a "skip", which follows the step's jump.
+ */
 export function transitionsOf(step: FlowStep, ordered: FlowStep[]): Transition[] {
-  if (step.type === "question" && step.options.length > 0) {
-    return step.options.map((option) => ({ optionId: option.id, target: resolveNext(step, option, ordered) }));
-  }
-  return [{ optionId: null, target: resolveNext(step, null, ordered) }];
+  const stepTarget = resolveNext(step, null, ordered);
+  const transitions: Transition[] =
+    usesOptionJumps(step) && step.options.length > 0
+      ? step.options.map((option) => ({ via: "option", optionId: option.id, target: resolveNext(step, option, ordered) }))
+      : [{ via: "continue", optionId: null, target: stepTarget }];
+
+  if (step.type === "question" && !step.required) transitions.push({ via: "skip", optionId: null, target: stepTarget });
+  return transitions;
 }
 
 export type FlowIssue =
@@ -44,10 +67,10 @@ function missingTargets(ordered: FlowStep[]): FlowIssue[] {
   const ids = new Set(ordered.map((step) => step.id));
   const issues: FlowIssue[] = [];
   for (const step of ordered) {
-    const jumps: Array<[string | null, string | null]> = [
-      [null, step.nextStepId],
-      ...step.options.map((option): [string, string | null] => [option.id, option.nextStepId]),
-    ];
+    const optionJumps = usesOptionJumps(step)
+      ? step.options.map((option): [string, string | null] => [option.id, option.nextStepId])
+      : [];
+    const jumps: Array<[string | null, string | null]> = [[null, step.nextStepId], ...optionJumps];
     for (const [optionId, target] of jumps) {
       if (target && target !== END_OF_QUESTIONNAIRE && !ids.has(target)) {
         issues.push({ kind: "missing-target", stepId: step.id, optionId, target });

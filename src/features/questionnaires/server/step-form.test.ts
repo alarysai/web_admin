@@ -59,8 +59,9 @@ describe("readStepForm", () => {
         image: null,
         promptInstruction: " seja breve ",
         nextStepId: "s9",
+        tipId: null,
       },
-      { id: "aa", text: { pt: "Outra", en: "", es: "" }, image: null, promptInstruction: "", nextStepId: null },
+      { id: "aa", text: { pt: "Outra", en: "", es: "" }, image: null, promptInstruction: "", nextStepId: null, tipId: null },
     ]);
   });
 
@@ -103,5 +104,65 @@ describe("errorsByOptionId", () => {
 
   it("leaves unknown positions untouched", () => {
     expect(errorsByOptionId({ "options.5.id": "x" }, ["a"])).toEqual({ "options.5.id": "x" });
+  });
+});
+
+describe("readStepForm — v2 fields", () => {
+  const base = (entries: Array<[string, string]>) => form([["order", "1"], ...text("text", "Pergunta"), ...entries]);
+
+  it("defaults a question to required single choice with the default limit", () => {
+    const step = readStepForm(base([["type", "question"]]));
+    expect(step).toMatchObject({ answerType: "single_choice", required: true, maxLength: 500, helpText: null, placeholder: null });
+  });
+
+  it("reads help text, the optional checkbox and an unknown answer type as single choice", () => {
+    const step = readStepForm(
+      base([["type", "question"], ["answerType", "slider"], ["optional", "on"], ...text("helpText", "Isso ajuda a Alarys")]),
+    );
+    expect(step).toMatchObject({ answerType: "single_choice", required: false, helpText: { pt: "Isso ajuda a Alarys", en: "", es: "" } });
+  });
+
+  it("open text drops the options and reads limit and placeholder", () => {
+    const step = readStepForm(
+      base([
+        ["type", "question"],
+        ["answerType", "open_text"],
+        ["maxLength", "280"],
+        ...text("placeholder", "Descreva a cena"),
+        ["options.a.id", "a"],
+        ...text("options.a.text", "Sobra"),
+      ]),
+    );
+    expect(step).toMatchObject({ answerType: "open_text", options: [], maxLength: 280, placeholder: { pt: "Descreva a cena", en: "", es: "" } });
+  });
+
+  it("a blank limit means the default", () => {
+    expect(readStepForm(base([["type", "question"], ["answerType", "open_text"], ["maxLength", ""]])).maxLength).toBe(500);
+  });
+
+  it("only open text keeps limit and placeholder", () => {
+    const step = readStepForm(base([["type", "question"], ["answerType", "single_choice"], ["maxLength", "10"], ...text("placeholder", "x")]));
+    expect(step).toMatchObject({ maxLength: 500, placeholder: null });
+  });
+
+  it("multiple choice drops option jumps but keeps option tips", () => {
+    const step = readStepForm(
+      base([
+        ["type", "question"],
+        ["answerType", "multiple_choice"],
+        ["options.a.id", "a"],
+        ...text("options.a.text", "A"),
+        ["options.a.nextStepId", "s9"],
+        ["options.a.tipId", "consent"],
+      ]),
+    );
+    expect(step.options).toEqual([expect.objectContaining({ id: "a", nextStepId: null, tipId: "consent" })]);
+  });
+
+  it("a video resets every answer setting", () => {
+    const step = readStepForm(
+      base([["type", "video"], ["answerType", "open_text"], ["optional", "on"], ["maxLength", "9"], ...text("helpText", "x")]),
+    );
+    expect(step).toMatchObject({ answerType: "single_choice", required: true, maxLength: 500, helpText: null, placeholder: null });
   });
 });

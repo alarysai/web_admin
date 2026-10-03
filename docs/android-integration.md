@@ -32,16 +32,16 @@ Por que Firestore direto, e não uma API: as listas do app são consultas simple
 
 ### 2.1 Registrar o app no Firebase (uma vez)
 
-O app Android ainda **não está registrado** no projeto. Quem tiver acesso ao Firebase CLI pode registrar assim (troque o pacote pelo `applicationId` real):
+O app Android **já está registrado** (2026-10-02): `com.alarysai.alarysai`, App ID `1:401658602082:android:5e4d6f50ce7f59b96e273b`, nome "alarysai". O comando usado foi este (fica como referência para um app novo):
 
 ```bash
-firebase apps:create ANDROID "alarysai android" --package-name com.alarys.alarysai --project alarysai-b6e85
+firebase apps:create ANDROID "alarysai android" --package-name com.alarysai.alarysai --project alarysai-b6e85
 ```
 
 Depois baixe o `google-services.json`, pelo console (⚙️ Configurações do projeto → Seus apps → Android) ou pelo CLI, e coloque em `app/`:
 
 ```bash
-firebase apps:sdkconfig ANDROID <APP_ID> --project alarysai-b6e85
+firebase apps:sdkconfig ANDROID 1:401658602082:android:5e4d6f50ce7f59b96e273b --project alarysai-b6e85
 ```
 
 O `google-services.json` contém identificadores públicos (não é segredo), mas mantenha o mesmo cuidado de não versionar chaves de outros projetos por engano.
@@ -214,12 +214,15 @@ Campos e tipos conferidos contra um documento real do projeto (os textos são il
   "image": null,
   "languages": ["pt"],
   "order": 1,
+  "creditCost": 4,
   "status": "published",
   "publishedAt": "2026-10-02T18:30:00Z"
 }
 ```
 
-`languages` lista os idiomas em que **tudo** (título, descrição, passos, opções, informações booleanas) está traduzido. É calculado pelo painel.
+`creditCost` (v2) é **só informativo**: mostre "Custo: N créditos" na revisão. Se vier `null` ou não existir, não mostre. O débito real é feito pelo servidor.
+
+`languages` lista os idiomas em que **tudo** (título, descrição, passos, textos de ajuda, exemplos da resposta aberta, opções e informações booleanas) está traduzido. É calculado pelo painel.
 
 ### `questionnaires/{questionnaireId}/steps/{stepId}` — pergunta
 
@@ -236,14 +239,16 @@ Campos e tipos conferidos contra um documento real do projeto (os textos são il
       "text": { "pt": "Ética", "en": "Ethics", "es": null },
       "image": null,
       "promptInstruction": "Foque nos dilemas éticos.",
-      "nextStepId": "__end__"
+      "nextStepId": "__end__",
+      "tipId": "Kq81PzTipDoc"
     },
     {
       "id": "e5f6a7b8",
       "text": { "pt": "Redação", "en": "Writing", "es": null },
       "image": null,
       "promptInstruction": null,
-      "nextStepId": null
+      "nextStepId": null,
+      "tipId": null
     }
   ],
   "nextStepId": null,
@@ -253,7 +258,36 @@ Campos e tipos conferidos contra um documento real do projeto (os textos são il
     "label": { "pt": "Isso é ético?", "en": "Is this ethical?", "es": null },
     "value": true,
     "tipId": "Kq81PzTipDoc"
-  }
+  },
+  "answerType": "single_choice",
+  "helpText": { "pt": "Isso ajuda a Alarys a escolher o tom do texto.", "en": null, "es": null },
+  "required": true,
+  "maxLength": 500,
+  "placeholder": null,
+  "tipIds": ["Kq81PzTipDoc"]
+}
+```
+
+### Passo — resposta aberta (v2)
+
+```json
+{
+  "order": 3,
+  "type": "question",
+  "text": { "pt": "Descreva a cena que você imagina.", "en": "Describe the scene you imagine.", "es": null },
+  "image": null,
+  "videoUrl": null,
+  "options": [],
+  "nextStepId": null,
+  "partOfPrompt": true,
+  "promptInstruction": "Use a descrição como base da imagem.",
+  "infoFlag": null,
+  "answerType": "open_text",
+  "helpText": null,
+  "required": false,
+  "maxLength": 280,
+  "placeholder": { "pt": "Ex.: um gato astronauta flutuando sobre a cidade", "en": null, "es": null },
+  "tipIds": []
 }
 ```
 
@@ -278,10 +312,13 @@ Garantias que o painel dá (validadas ao salvar e ao publicar):
 
 - Todo passo tem `text` ou `image`.
 - `type == "video"` tem `videoUrl` (`https://`) e `options` vazio.
-- `type == "question"` tem ao menos uma opção, cada uma com `text` ou `image`; `option.id` é único no passo.
+- `type == "question"`: as opções dependem do `answerType` (v2). `single_choice` e `multiple_choice` têm ao menos uma; `yes_no` tem **exatamente 2**; `open_text` não tem nenhuma. Cada opção tem `text` ou `image`, e `option.id` é único no passo.
+- **Campos v2 ausentes** (passos gravados antes da v2) valem: `answerType = "single_choice"`, `helpText = null`, `required = true`, `maxLength = 500`, `placeholder = null`, `option.tipId = null`, `creditCost = null`. `required` só é `false` em perguntas. `maxLength` vai de 1 a 5000.
+- `options[].nextStepId` só vem preenchido em `single_choice` e `yes_no`. Na `multiple_choice` o painel grava `null`, e ele deve ser ignorado se aparecer.
 - `nextStepId` (do passo e das opções) é `null`, `"__end__"` ou o ID de um passo **do mesmo questionário**.
 - O fluxo **não tem ciclos**: todo caminho termina.
-- `infoFlag.tipId`, quando preenchido, aponta para uma dica que existia na publicação. Ela pode estar **inativa**: nesse caso, não mostre a dica.
+- `infoFlag.tipId` e `options[].tipId`, quando preenchidos, apontam para dicas que existiam na publicação. Elas podem estar **inativas**: nesse caso, não mostre a dica.
+- `tipIds` é calculado pelo painel (lista de todas as dicas do passo) para uso interno. O app pode ignorar.
 
 ### `tipCategories/{categoryId}`
 
@@ -323,18 +360,28 @@ Garantias que o painel dá (validadas ao salvar e ao publicar):
 
 O painel valida o fluxo com o mesmo algoritmo (`src/features/questionnaires/domain/flow.ts`). Para decidir o **próximo passo**, use o primeiro destes que existir:
 
-1. `nextStepId` da **opção escolhida**;
+1. `nextStepId` da **opção escolhida**: só em `single_choice` e `yes_no`;
 2. `nextStepId` do **passo**;
 3. o **próximo passo por `order`**; se não houver próximo, o questionário termina.
 
 `"__end__"` em qualquer `nextStepId` encerra o questionário na hora. O primeiro passo é o de **menor `order`**.
 
+Na `multiple_choice` e na `open_text` o salto é sempre o do passo, porque nenhuma opção sozinha decide. **"Pular"**, que aparece quando `required == false`, também segue o salto do passo, nunca o de uma opção.
+
 ```kotlin
 const val END_OF_QUESTIONNAIRE = "__end__"
 
-/** Próximo passo depois de [step] (e da [option] escolhida, em perguntas). null = fim. */
+/** O salto da opção só vale onde uma opção decide sozinha. */
+fun Step.usesOptionJumps() =
+    type == StepType.QUESTION && (answerType == AnswerType.SINGLE_CHOICE || answerType == AnswerType.YES_NO)
+
+/**
+ * Próximo passo depois de [step]. [option] é a opção escolhida numa escolha única ou sim/não.
+ * Passe null para vídeo, múltipla escolha, resposta aberta e "Pular". null = fim.
+ */
 fun resolveNext(step: Step, option: StepOption?, ordered: List<Step>): String? {
-    val jump = option?.nextStepId ?: step.nextStepId
+    val optionJump = if (option != null && step.usesOptionJumps()) option.nextStepId else null
+    val jump = optionJump ?: step.nextStepId
     if (jump == END_OF_QUESTIONNAIRE) return null
     if (jump != null) return jump
     val index = ordered.indexOfFirst { it.id == step.id }
@@ -345,17 +392,29 @@ fun resolveNext(step: Step, option: StepOption?, ordered: List<Step>): String? {
 Como usar:
 
 - `ordered = steps.sortedWith(compareBy<Step> { it.order }.thenBy { it.id })`. O desempate por `id` é o mesmo do painel.
-- **Pergunta:** mostre `text` e as `options`. Ao tocar numa opção, `resolveNext(step, option, ordered)`.
+- **Pergunta**, conforme o `answerType`:
+  - `single_choice`: rádio; depois de "Continuar", `resolveNext(step, opçãoEscolhida, ordered)`.
+  - `yes_no`: as 2 opções lado a lado; mesmo `resolveNext` da escolha única.
+  - `multiple_choice`: caixas de seleção; `resolveNext(step, null, ordered)`.
+  - `open_text`: campo de texto com `maxLength`, contador ("94/500") e `placeholder`; `resolveNext(step, null, ordered)`.
+  - `helpText`, quando houver, vai abaixo do enunciado.
+  - `required == false`: mostre "Pular"; ao pular, `resolveNext(step, null, ordered)`.
 - **Vídeo:** mostre `text` e um botão para `videoUrl`. Ao continuar, `resolveNext(step, null, ordered)`.
-- **Informação booleana:** se `infoFlag != null`, mostre `infoFlag.label` com a resposta (`value`: Sim ou Não) e, se `tipId` apontar para uma dica ativa, a dica.
+- **Dicas:** enquanto uma opção com `tipId` estiver selecionada, mostre essa dica. Ela tem prioridade sobre a do `infoFlag`. Sem dica de opção, use `infoFlag.label` e a dica do `infoFlag.tipId`. Dica inativa (`PERMISSION_DENIED` ao ler) = sem dica. O `infoFlag.value` continua sendo gravado pelo painel, mas o design atual não o mostra.
 - **Proteção:** o painel garante que não há ciclos, mas por segurança limite a execução (ex.: 200 passos) e trate um `nextStepId` que não existe na lista como fim.
 
 ### Partes do prompt
 
-Guarde, para cada passo respondido com `partOfPrompt == true`:
+Para cada passo respondido (ou pulado) com `partOfPrompt == true`, na ordem em que foi respondido:
 
-- a resposta (o texto da opção escolhida, no idioma usado);
-- `step.promptInstruction` e `option.promptInstruction`, quando não forem `null`. Elas **não são traduzidas**: vão como estão para a IA.
+| Tipo | Resposta | Instruções |
+| --- | --- | --- |
+| `single_choice` / `yes_no` | texto da opção escolhida (no idioma usado) | `step.promptInstruction`, `option.promptInstruction` |
+| `multiple_choice` | textos das escolhidas **na ordem do passo**, separados por ", " | `step.promptInstruction` + a de **cada** opção escolhida |
+| `open_text` | o texto digitado, como está (não traduzido); vazio = sem resposta | `step.promptInstruction` |
+| pulado / vídeo | nenhuma | `step.promptInstruction` |
+
+As instruções **não são traduzidas**: vão como estão para a IA. Implementação de referência: `src/features/questionnaires/domain/prompt-preview.ts`, a mesma usada pelo simulador do painel.
 
 O formato final do prompt e a chamada à IA ficam a cargo do **serviço de geração** (servidor), que ainda não existe. O app deve enviar essas partes para esse serviço, e não chamar a IA diretamente, porque as chaves de API não podem ficar no app.
 
@@ -381,6 +440,7 @@ data class StepOptionDto(
     val image: ImageRefDto? = null,
     val promptInstruction: String? = null,
     val nextStepId: String? = null,
+    val tipId: String? = null,                 // v2
 )
 
 @IgnoreExtraProperties
@@ -398,8 +458,16 @@ data class StepDto(
     val partOfPrompt: Boolean = false,
     val promptInstruction: String? = null,
     val infoFlag: InfoFlagDto? = null,
+    // v2: os padrões abaixo são os valores de quando o campo não existe.
+    val answerType: String = "single_choice",
+    val helpText: LocalizedTextDto? = null,
+    val required: Boolean = true,
+    val maxLength: Long = 500,
+    val placeholder: LocalizedTextDto? = null,
 )
 ```
+
+No mapper, trate um `answerType` desconhecido como `single_choice` e um `maxLength` fora de 1–5000 como 500, como faz o painel.
 
 ```kotlin
 enum class Language { PT, EN, ES }
@@ -529,6 +597,7 @@ Para conferir o fluxo de um questionário, use a **pré-visualização** do pain
 | Questionários publicados, dicas e anunciantes ativos | ainda nenhum (consultas devolvem listas vazias; o app precisa do estado vazio) |
 | Imagens | sempre `null` até o Storage ser ativado (plano Blaze) |
 | Serviço de geração (IA, créditos, histórico) | não existe ainda |
-| App Android registrado no Firebase | ainda não (seção 2.1) |
+| Questionário v2 (tipos de resposta, Pular, dica por opção, custo) | **gravado pelo painel desde 2026-10-03** (proposta `proposta-questionario-v2.md`). `promptTemplate` ficou para depois |
+| App Android registrado no Firebase | sim: `com.alarysai.alarysai` (seção 2.1). Repo `alarysai/app_android` |
 
 Mudanças no formato dos documentos são registradas no [data-model.md](data-model.md), que é a fonte de verdade. Renomear ou remover um campo publicado é uma mudança incompatível com os apps já instalados: o painel deve **adicionar** campos novos, e não alterar os existentes, sempre que possível.

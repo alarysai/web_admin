@@ -10,6 +10,8 @@ export type Questionnaire = {
   categoryId: string;
   languages: Language[];
   order: number;
+  /** Informative cost shown in the app; null = not shown. */
+  creditCost: number | null;
   status: QuestionnaireStatus;
   updatedAt: Date | null;
 };

@@ -12,6 +12,7 @@ describe("toQuestionnaire", () => {
         categoryId: "c1",
         languages: ["pt", "en"],
         order: 3,
+        creditCost: 4,
         status: "published",
         updatedAt: { toDate: () => updatedAt },
       }),
@@ -22,6 +23,7 @@ describe("toQuestionnaire", () => {
       categoryId: "c1",
       languages: ["pt", "en"],
       order: 3,
+      creditCost: 4,
       status: "published",
       updatedAt,
     });

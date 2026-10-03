@@ -1,6 +1,13 @@
 import type { AdminSession } from "@/features/auth/domain/admin-session";
 import { formError, SESSION_EXPIRED_MESSAGE, zodFieldErrors, type FormState } from "@/lib/forms/form-state";
-import { formValues, readInteger, readLocalizedText, readOptionalLocalizedText, readString } from "@/lib/forms/form-data";
+import {
+  formValues,
+  readInteger,
+  readLocalizedText,
+  readOptionalInteger,
+  readOptionalLocalizedText,
+  readString,
+} from "@/lib/forms/form-data";
 
 import { questionnaireInputSchema, type QuestionnaireInput } from "../domain/schemas";
 
@@ -21,6 +28,7 @@ export function readQuestionnaireForm(formData: FormData) {
     description: readOptionalLocalizedText(formData, "description"),
     categoryId: readString(formData, "categoryId"),
     order: readInteger(formData, "order"),
+    creditCost: readOptionalInteger(formData, "creditCost"),
   };
 }
 

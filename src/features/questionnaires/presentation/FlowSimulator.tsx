@@ -2,21 +2,25 @@
 
 import { useState } from "react";
 
-import { displayText, LANGUAGE_LABELS, LANGUAGES, type Language } from "@/lib/content/localized-text";
+import { LANGUAGE_LABELS, LANGUAGES, type Language, type LocalizedText } from "@/lib/content/localized-text";
 
 import { resolveNext } from "../domain/flow";
 import { promptParts, type VisitedStep } from "../domain/prompt-preview";
+import type { StepOption } from "../domain/schemas";
 import { sortSteps, type StepRecord } from "../domain/steps";
+import { SimulatorStep } from "./SimulatorStep";
 
 /** Safety net: the server forbids cycles, but legacy data must never hang the preview. */
 const MAX_VISITS = 200;
 
 type FlowSimulatorProps = {
   steps: StepRecord[];
+  /** Active tips by id (inactive tips are not shown, like in the app). */
+  tipTexts?: Record<string, LocalizedText>;
 };
 
 /** Walks the questionnaire like the app would, in any language. */
-export function FlowSimulator({ steps }: FlowSimulatorProps) {
+export function FlowSimulator({ steps, tipTexts = {} }: FlowSimulatorProps) {
   const ordered = sortSteps(steps);
   const byId = new Map(ordered.map((step) => [step.id, step]));
   const firstId = ordered[0]?.id ?? null;
@@ -28,10 +32,9 @@ export function FlowSimulator({ steps }: FlowSimulatorProps) {
   const current = currentId ? byId.get(currentId) : undefined;
   const finished = currentId === null || !current || path.length >= MAX_VISITS;
 
-  function choose(optionId: string | null) {
+  function answer(visit: VisitedStep, option: StepOption | null) {
     if (!current) return;
-    const option = current.options.find((candidate) => candidate.id === optionId) ?? null;
-    setPath((visited) => [...visited, { stepId: current.id, optionId }]);
+    setPath((visited) => [...visited, visit]);
     setCurrentId(resolveNext(current, option, ordered));
   }
 
@@ -79,40 +82,8 @@ export function FlowSimulator({ steps }: FlowSimulatorProps) {
             {currentId !== null && !current ? `Salto para um passo que não existe (${currentId}).` : "Fim do questionário."}
           </p>
         ) : (
-          <div className="flex flex-col gap-3">
-            <span className="text-xs text-zinc-500">Passo #{current.order}</span>
-            <p className="text-base">{displayText(current.text, language) || "(sem texto)"}</p>
-            {current.type === "video" ? (
-              <>
-                {current.videoUrl && (
-                  <a href={current.videoUrl} target="_blank" rel="noreferrer" className="text-sm underline">
-                    Abrir vídeo
-                  </a>
-                )}
-                <button type="button" onClick={() => choose(null)} className="self-start rounded-md bg-zinc-900 px-4 py-2 text-sm text-white">
-                  Continuar
-                </button>
-              </>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {current.options.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => choose(option.id)}
-                    className="rounded-md border border-zinc-400 bg-white px-4 py-2 text-sm"
-                  >
-                    {displayText(option.text, language) || "(opção sem texto)"}
-                  </button>
-                ))}
-              </div>
-            )}
-            {current.infoFlag && (
-              <p className="text-xs text-zinc-600">
-                {displayText(current.infoFlag.label, language)} {current.infoFlag.value ? "Sim" : "Não"}
-              </p>
-            )}
-          </div>
+          // Keyed by visit count: a fresh card (no leftover selection) for every step shown.
+          <SimulatorStep key={`${current.id}-${path.length}`} step={current} language={language} tipTexts={tipTexts} onAnswer={answer} />
         )}
       </div>
 

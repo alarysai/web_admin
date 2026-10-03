@@ -23,6 +23,12 @@ export function readInteger(formData: FormData, name: string): number {
   return raw === "" ? Number.NaN : Number(raw);
 }
 
+/** Optional whole number: blank becomes null; anything else goes to the schema as a number (NaN if not numeric). */
+export function readOptionalInteger(formData: FormData, name: string): number | null {
+  const raw = readString(formData, name).trim();
+  return raw === "" ? null : Number(raw);
+}
+
 /** `<name>.pt`, `<name>.en`, `<name>.es` inputs as a LocalizedText-shaped object. */
 export function readLocalizedText(formData: FormData, name: string): Record<Language, string> {
   return Object.fromEntries(LANGUAGES.map((language) => [language, readString(formData, `${name}.${language}`)])) as Record<

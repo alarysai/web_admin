@@ -5,10 +5,16 @@ import { SelectField } from "@/components/form/SelectField";
 import { TextAreaField } from "@/components/form/TextAreaField";
 
 import { jumpChoices, type JumpTarget } from "./jump-choices";
+import { tipSelectOptions } from "./step-values";
 
 type StepOptionsEditorProps = {
   optionIds: string[];
   jumpTargets: JumpTarget[];
+  /** Option jumps only exist where one option decides the next step (single choice, yes/no). */
+  showJumps: boolean;
+  tipChoices: ReadonlyArray<{ value: string; label: string }>;
+  /** Extra rule shown under the title (e.g. "exactly 2 options" for yes/no). */
+  hint?: string;
   values: Record<string, string>;
   errors: Record<string, string>;
   onAdd: () => void;
@@ -16,7 +22,17 @@ type StepOptionsEditorProps = {
 };
 
 /** Answer options of a question. Field names use the option id (see server/step-form.ts). */
-export function StepOptionsEditor({ optionIds, jumpTargets, values, errors, onAdd, onRemove }: StepOptionsEditorProps) {
+export function StepOptionsEditor({
+  optionIds,
+  jumpTargets,
+  showJumps,
+  tipChoices,
+  hint,
+  values,
+  errors,
+  onAdd,
+  onRemove,
+}: StepOptionsEditorProps) {
   return (
     <section aria-labelledby="options-heading" className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
@@ -27,6 +43,7 @@ export function StepOptionsEditor({ optionIds, jumpTargets, values, errors, onAd
           Adicionar opção
         </button>
       </div>
+      {hint && <p className="text-xs text-zinc-500">{hint}</p>}
       {errors.options && (
         <p role="alert" className="text-xs text-red-600">
           {errors.options}
@@ -59,12 +76,22 @@ export function StepOptionsEditor({ optionIds, jumpTargets, values, errors, onAd
               hint="Enviada à IA quando o usuário escolhe esta opção."
               rows={2}
             />
+            {showJumps && (
+              <SelectField
+                name={`${base}.nextStepId`}
+                label="Depois desta opção"
+                options={jumpChoices(jumpTargets, "Usar o “Próximo passo” do passo", values[`${base}.nextStepId`] ?? "")}
+                defaultValue={values[`${base}.nextStepId`] ?? ""}
+                error={errors[`${base}.nextStepId`]}
+              />
+            )}
             <SelectField
-              name={`${base}.nextStepId`}
-              label="Depois desta opção"
-              options={jumpChoices(jumpTargets, "Usar o “Próximo passo” do passo", values[`${base}.nextStepId`] ?? "")}
-              defaultValue={values[`${base}.nextStepId`] ?? ""}
-              error={errors[`${base}.nextStepId`]}
+              name={`${base}.tipId`}
+              label="Dica desta opção (opcional)"
+              options={tipSelectOptions(tipChoices, values[`${base}.tipId`] ?? "")}
+              placeholder="Nenhuma dica"
+              defaultValue={values[`${base}.tipId`] ?? ""}
+              error={errors[`${base}.tipId`]}
             />
           </div>
         );

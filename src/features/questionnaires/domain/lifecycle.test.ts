@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { checkPublishable, copyTitle, duplicateSteps } from "./lifecycle";
 import type { StepRecord } from "./steps";
+import { DEFAULT_ANSWER_FIELDS } from "./schemas";
 
 function video(id: string, order: number, nextStepId: string | null = null): StepRecord {
   return {
@@ -16,6 +17,7 @@ function video(id: string, order: number, nextStepId: string | null = null): Ste
     partOfPrompt: false,
     promptInstruction: null,
     infoFlag: null,
+    ...DEFAULT_ANSWER_FIELDS,
   };
 }
 
@@ -71,8 +73,8 @@ describe("duplicateSteps", () => {
         type: "question",
         videoUrl: null,
         options: [
-          { id: "o1", text: { pt: "x", en: null, es: null }, image: null, promptInstruction: null, nextStepId: "a" },
-          { id: "o2", text: { pt: "y", en: null, es: null }, image: null, promptInstruction: null, nextStepId: "ghost" },
+          { id: "o1", text: { pt: "x", en: null, es: null }, image: null, promptInstruction: null, nextStepId: "a", tipId: null },
+          { id: "o2", text: { pt: "y", en: null, es: null }, image: null, promptInstruction: null, nextStepId: "ghost", tipId: null },
         ],
       },
       video("c", 3),
@@ -95,6 +97,7 @@ describe("checkPublishable with linked tips", () => {
   const withTip = (tipId: string): StepRecord => ({
     ...video("a", 1),
     infoFlag: { label: { pt: "Isso é ético?", en: null, es: null }, value: true, tipId },
+    ...DEFAULT_ANSWER_FIELDS,
   });
 
   it("blocks a link to a deleted tip", () => {

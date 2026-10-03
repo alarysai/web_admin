@@ -24,6 +24,7 @@ const saved: Questionnaire = {
   categoryId: "c2",
   languages: ["pt"],
   order: 4,
+  creditCost: null,
   status: "draft",
   updatedAt: null,
 };
@@ -86,5 +87,15 @@ describe("QuestionnaireForm", () => {
 
     finish(formSuccess("Questionário salvo."));
     expect(await screen.findByRole("button", { name: "Salvar alterações" })).toBeEnabled();
+  });
+});
+
+describe("QuestionnaireForm credit cost", () => {
+  it("shows the saved cost and leaves it blank when not set", () => {
+    const { unmount } = render(<QuestionnaireForm questionnaire={{ ...saved, creditCost: 4 }} categories={categories} action={vi.fn()} />);
+    expect(screen.getByLabelText("Custo em créditos (opcional)")).toHaveValue(4);
+    unmount();
+    render(<QuestionnaireForm questionnaire={saved} categories={categories} action={vi.fn()} />);
+    expect(screen.getByLabelText("Custo em créditos (opcional)")).toHaveValue(null);
   });
 });

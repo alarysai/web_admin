@@ -67,13 +67,20 @@ export async function deleteTip(id: string): Promise<boolean> {
 }
 
 /**
- * Steps whose info flag links to the tip, across all questionnaires
- * (collection group query on `steps`; index in firestore.indexes.json).
+ * Steps that link to the tip (info flag or an option), across all
+ * questionnaires: `tipIds` array-contains, plus `infoFlag.tipId` for steps
+ * saved before `tipIds` existed. Collection group queries; indexes in
+ * firestore.indexes.json (fieldOverrides).
  */
 export async function findTipUsages(tipId: string): Promise<TipUsage[]> {
-  const steps = await getAdminFirestore().collectionGroup("steps").where("infoFlag.tipId", "==", tipId).get();
+  const steps = getAdminFirestore().collectionGroup("steps");
+  const [byList, byInfoFlag] = await Promise.all([
+    steps.where("tipIds", "array-contains", tipId).get(),
+    steps.where("infoFlag.tipId", "==", tipId).get(),
+  ]);
+  const unique = new Map([...byList.docs, ...byInfoFlag.docs].map((doc) => [doc.ref.path, doc]));
   return Promise.all(
-    steps.docs.map(async (step) => {
+    [...unique.values()].map(async (step) => {
       const questionnaire = await step.ref.parent.parent!.get();
       const data = questionnaire.data() ?? {};
       return {

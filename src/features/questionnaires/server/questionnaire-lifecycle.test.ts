@@ -10,6 +10,7 @@ import {
   type PublishDeps,
 } from "./questionnaire-lifecycle";
 import { SESSION_EXPIRED_MESSAGE } from "./save-questionnaire";
+import { DEFAULT_ANSWER_FIELDS } from "../domain/schemas";
 
 const admin = { uid: "admin-1", email: null };
 
@@ -20,6 +21,7 @@ const questionnaire = (status: Questionnaire["status"] = "draft"): Questionnaire
   categoryId: "c1",
   languages: ["pt"],
   order: 0,
+  creditCost: null,
   status,
   updatedAt: null,
 });
@@ -36,6 +38,7 @@ const step: StepRecord = {
   partOfPrompt: false,
   promptInstruction: null,
   infoFlag: null,
+  ...DEFAULT_ANSWER_FIELDS,
 };
 
 function publishDeps(overrides: Partial<PublishDeps> = {}): PublishDeps {

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { StepRecord } from "../domain/steps";
 import { SESSION_EXPIRED_MESSAGE } from "./save-questionnaire";
 import { deleteStepById, saveStep, type DeleteStepDeps, type SaveStepDeps } from "./save-step";
+import { DEFAULT_ANSWER_FIELDS } from "../domain/schemas";
 
 const admin = { uid: "admin-1", email: null };
 
@@ -19,6 +20,7 @@ function existingStep(id: string, overrides: Partial<StepRecord> = {}): StepReco
     partOfPrompt: false,
     promptInstruction: null,
     infoFlag: null,
+    ...DEFAULT_ANSWER_FIELDS,
     ...overrides,
   };
 }
@@ -116,6 +118,39 @@ describe("saveStep", () => {
     expect(result).toMatchObject({ ok: false, state: { fieldErrors: { "infoFlag.tipId": expect.stringContaining("Dica não encontrada") } } });
     expect(d.tipExists).toHaveBeenCalledWith("gone");
     expect(d.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects an option tip that does not exist, on that option's field", async () => {
+    const tipExists = vi.fn(async (tipId: string) => tipId !== "gone");
+    const data = new FormData();
+    [
+      ["type", "question"],
+      ["order", "1"],
+      ["text.pt", "Qual?"],
+      ["options.a.id", "a"],
+      ["options.a.text.pt", "Sim"],
+      ["options.a.tipId", "gone"],
+      ["options.b.id", "b"],
+      ["options.b.text.pt", "Não"],
+      ["options.b.tipId", "ok"],
+    ].forEach(([key, value]) => data.append(key, value));
+    const result = await saveStep("q1", null, data, deps({ tipExists }));
+    expect(result).toMatchObject({ ok: false, state: { fieldErrors: { "options.a.tipId": expect.stringContaining("Dica não encontrada") } } });
+    if (!result.ok) expect(result.state.fieldErrors["options.b.tipId"]).toBeUndefined();
+  });
+
+  it("reports answer-type errors on the right field", async () => {
+    const data = new FormData();
+    [
+      ["type", "question"],
+      ["order", "1"],
+      ["text.pt", "Sim ou não?"],
+      ["answerType", "yes_no"],
+      ["options.a.id", "a"],
+      ["options.a.text.pt", "Sim"],
+    ].forEach(([key, value]) => data.append(key, value));
+    const result = await saveStep("q1", null, data, deps());
+    expect(result).toMatchObject({ ok: false, state: { fieldErrors: { options: expect.stringContaining("exatamente 2") } } });
   });
 
   it("reports a step deleted meanwhile", async () => {

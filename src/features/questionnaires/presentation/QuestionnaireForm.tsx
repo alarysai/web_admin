@@ -27,6 +27,7 @@ function savedValues(questionnaire: Questionnaire | null): Record<string, string
     ...localizedValues("description", questionnaire?.description ?? null),
     categoryId: questionnaire?.categoryId ?? "",
     order: String(questionnaire?.order ?? 0),
+    creditCost: questionnaire?.creditCost === null || questionnaire?.creditCost === undefined ? "" : String(questionnaire.creditCost),
   };
 }
 
@@ -65,6 +66,18 @@ export function QuestionnaireForm({ questionnaire, categories, action, initialSt
           required
         />
       </div>
+
+      <TextField
+        name="creditCost"
+        label="Custo em créditos (opcional)"
+        type="number"
+        min={0}
+        step={1}
+        defaultValue={values.creditCost}
+        error={errors.creditCost}
+        hint="Só informativo: o app mostra “Custo: N créditos” na revisão. O débito real é feito pelo servidor. Vazio = não mostra."
+        className="max-w-xs"
+      />
 
       <div className="flex items-center gap-3">
         <button
